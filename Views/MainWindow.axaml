@@ -7,10 +7,8 @@
     x:Class="Declutterer.Views.MainWindow"
     x:DataType="vm:MainWindowViewModel"
     xmlns="https://github.com/avaloniaui"
-    xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:models="using:Declutterer.Models"
     xmlns:vm="using:Declutterer.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
@@ -28,18 +26,32 @@
             Grid.Row="0"
             Margin="10"
             Orientation="Horizontal">
-            <Button Command="{Binding AddDirectoryCommand}" Content="Add directories to scan +" />
+            <Button
+                Command="{Binding ShowScanOptionsWindowCommand}"
+                Content="Perform Scan"
+                Margin="0,0,10,0" />
             <CheckBox
                 Content="Also include files"
                 IsChecked="{Binding IncludeFiles}"
                 Margin="20,0" />
         </StackPanel>
 
-        <!--  TreeDataGrid with hierarchical display  -->
-        <TreeDataGrid
-            x:Name="TreeDataGrid"
-            Grid.Row="1"
-            Margin="10,0,10,10"
-            Source="{Binding Roots}" />
+        <!--  Main Content Area  -->
+        <Grid Grid.Row="1" Margin="10,0,10,10">
+            <!--  TreeDataGrid with hierarchical display  -->
+            <TreeDataGrid
+                Grid.Row="0"
+                IsVisible="{Binding Roots.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
+                Margin="10,0,10,10"
+                Source="{Binding Roots}"
+                x:Name="TreeDataGrid" />
+            <TextBlock
+                FontSize="18"
+                Foreground="Gray"
+                HorizontalAlignment="Center"
+                IsVisible="{Binding Roots.Count, Converter={StaticResource ZeroToBooleanConverter}}"
+                Text="No scan performed. Perform an scan first"
+                VerticalAlignment="Center" />
+        </Grid>
     </Grid>
 </Window>

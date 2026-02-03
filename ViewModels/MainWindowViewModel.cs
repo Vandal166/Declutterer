@@ -7,6 +7,7 @@ using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Declutterer.Models;
+using Declutterer.Views;
 
 namespace Declutterer.ViewModels;
 
@@ -39,6 +40,21 @@ public partial class MainWindowViewModel : ObservableObject
     
     public void SetTopLevel(TopLevel topLevel) => _topLevel = topLevel;
 
+    [RelayCommand]
+    private async Task ShowScanOptionsWindowAsync()
+    {
+        if (_topLevel == null) 
+            return;
+        
+        var scanOptionsWindow = new ScanOptionsWindow
+        {
+            DataContext = new ScanOptionsWindowViewModel()
+        };
+
+        if(_topLevel is Window window)
+            await scanOptionsWindow.ShowDialog(window);
+    }
+    
     [RelayCommand]
     private async Task AddDirectoryAsync()
     {

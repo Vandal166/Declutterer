@@ -1,0 +1,56 @@
+﻿<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Design.PreviewWith>
+        <Border Padding="20">
+            <!--  Add Controls for Previewer Here  -->
+        </Border>
+    </Design.PreviewWith>
+
+    <Style Selector="HeaderedContentControl.indented">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <DockPanel>
+                    <!--  Header and Top Border  -->
+                    <Grid
+                        ColumnDefinitions="Auto,Auto,*"
+                        DockPanel.Dock="Top"
+                        RowDefinitions="Auto">
+                        <!--  Top-left border segment  -->
+                        <Border
+                            BorderBrush="#666666"
+                            BorderThickness="1,1,0,0"
+                            CornerRadius="6,0,0,0"
+                            Grid.Column="0"
+                            Margin="0,8,0,0"
+                            Width="12" />
+
+                        <!--  Header Text  -->
+                        <Border
+                            Background="{DynamicResource ThemeBackgroundBrush}"
+                            Grid.Column="1"
+                            Padding="4,0">
+                            <TextBlock FontWeight="Bold" Text="{TemplateBinding Header}" />
+                        </Border>
+
+                        <!--  Top-right border segment  -->
+                        <Border
+                            BorderBrush="#666666"
+                            BorderThickness="0,1,1,0"
+                            CornerRadius="0,6,0,0"
+                            Grid.Column="2"
+                            Margin="0,8,0,0" />
+                    </Grid>
+
+                    <!--  Main Border with Content  -->
+                    <Border
+                        BorderBrush="#666666"
+                        BorderThickness="1,0,1,1"
+                        CornerRadius="0,0,6,6"
+                        Padding="12,12,12,12">
+                        <ContentPresenter Content="{TemplateBinding Content}" />
+                    </Border>
+                </DockPanel>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+</Styles>
