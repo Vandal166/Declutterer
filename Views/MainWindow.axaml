@@ -1,0 +1,45 @@
+<Window
+    Icon="/Assets/avalonia-logo.ico"
+    Title="Declutterer"
+    d:DesignHeight="450"
+    d:DesignWidth="800"
+    mc:Ignorable="d"
+    x:Class="Declutterer.Views.MainWindow"
+    x:DataType="vm:MainWindowViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:Declutterer.Models"
+    xmlns:vm="using:Declutterer.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Design.DataContext>
+        <!--
+            This only sets the DataContext for the previewer in an IDE,
+            to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs)
+        -->
+        <vm:MainWindowViewModel />
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto,*">
+        <!--  Toolbar  -->
+        <StackPanel
+            Grid.Row="0"
+            Margin="10"
+            Orientation="Horizontal">
+            <Button Command="{Binding AddDirectoryCommand}" Content="Add directories to scan +" />
+            <CheckBox
+                Content="Also include files"
+                IsChecked="{Binding IncludeFiles}"
+                Margin="20,0" />
+        </StackPanel>
+
+        <!--  TreeDataGrid with hierarchical display  -->
+        <TreeDataGrid
+            x:Name="TreeDataGrid"
+            Grid.Row="1"
+            Margin="10,0,10,10"
+            Source="{Binding Roots}" />
+    </Grid>
+</Window>
