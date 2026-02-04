@@ -10,16 +10,40 @@ namespace Declutterer.Models;
 public partial class AgeFilter : ObservableObject
 {
     [ObservableProperty]
+    private int _monthsModifiedValue = 1; // storing months value
+
+    [ObservableProperty]
     private DateTime? _modifiedBefore = null;
 
     [ObservableProperty]
     private bool _useModifiedDate = false; // Whether to apply modified date filter
     
+    partial void OnMonthsAccessedValueChanged(int value)
+    {
+        // Auto-enable filter when user changes the months value
+        if (value > 0)
+        {
+            UseAccessedDate = true;
+        }
+    }
+    
     [ObservableProperty]
     private DateTime? _accessedBefore = null;
     
     [ObservableProperty]
+    private int _monthsAccessedValue = 1;
+    
+    [ObservableProperty]
     private bool _useAccessedDate = false; // Whether to apply accessed date filter
+    
+    partial void OnMonthsModifiedValueChanged(int value)
+    {
+        // Auto-enable filter when user changes the months value
+        if (value > 0)
+        {
+            UseModifiedDate = true;
+        }
+    }
 }
 
 // not only for directories but also for files, so we can filter out large files if needed(only if include files is checked)
@@ -62,8 +86,6 @@ public partial class ScanOptions : ObservableObject
 /// </summary>
 public partial class TreeNode : ObservableObject
 {
-    // Static reference to the ViewModel's ToggleExpandCommand for lazy loading
-    public static Func<TreeNode, System.Threading.Tasks.Task>? OnExpandRequested { get; set; }
 
     [ObservableProperty]
     private string _name = string.Empty;
@@ -111,25 +133,4 @@ public partial class TreeNode : ObservableObject
 
     // Optional: Icon kind or type (for future)
     public string Extension => IsDirectory ? string.Empty : Path.GetExtension(FullPath);
-
-    public TreeNode()
-    {
-        // Subscribe to children collection changes to update HasChildren
-        Children.CollectionChanged += OnChildrenChanged;
-    }
-
-    private void OnChildrenChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        // Update HasChildren whenever the collection changes
-        HasChildren = IsDirectory && Children.Count > 0;
-    }
-
-    partial void OnIsExpandedChanged(bool value)
-    {
-        if (value && IsDirectory && (Children.Count == 0 || (Children.Count == 1 && Children[0].Name == "Loading...")))
-        {
-            // Trigger lazy load through the callback
-            OnExpandRequested?.Invoke(this);
-        }
-    }
 }

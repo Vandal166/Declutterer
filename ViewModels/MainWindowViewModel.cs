@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Declutterer.Models;
+using Declutterer.Services;
 using Declutterer.Views;
 
 namespace Declutterer.ViewModels;
@@ -16,26 +18,55 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] // ObservableProperty is used to generate the property with INotifyPropertyChanged implementation which will notify the UI when the property changes
     private string _greeting = "Add directories to scan";
     
+    private ScanOptions? _currentScanOptions;
+    
+    private readonly DirectoryScanService _directoryScanService;
+    
     private TopLevel? _topLevel;
     
     // an collection of root TreeNodes representing the top-level directories added by the user
     // TreeDataGrid will automatically handle hierarchical display using the Children collection
     public ObservableCollection<TreeNode> Roots { get; } = new();
     
-    [ObservableProperty]
-    private bool _includeFiles = false; // if we should include files in the scan
-    
-    public MainWindowViewModel()
+    public MainWindowViewModel(DirectoryScanService directoryScanService)
     {
-        // Set up the lazy loading callback for when nodes are expanded
-        TreeNode.OnExpandRequested = async (node) =>
+        _directoryScanService = directoryScanService;
+    }
+
+    public async Task LoadChildrenForNodeAsync(TreeNode node)
+    {
+        if (node.Children.Count > 0)
+            return; // Already loaded
+            
+        var children = await _directoryScanService.LoadChildrenAsync(node, _currentScanOptions);
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
         {
-            if (node.Children.Count > 0 && node.Children[0].Name == "Loading...")
+            foreach (var child in children)
             {
-                node.Children.Clear();
+                node.Children.Add(child);
             }
-            await LoadChildrenAsync(node);
-        };
+        });
+        
+        // Pre-load children for subdirectories (one level ahead) so expansion works immediately
+        var preloadTasks = children
+            .Where(c => c.IsDirectory && c.HasChildren)
+            .Select(child => PreloadChildrenAsync(child));
+        await Task.WhenAll(preloadTasks);
+    }
+    
+    private async Task PreloadChildrenAsync(TreeNode node)
+    {
+        if (node.Children.Count > 0)
+            return; // Already loaded
+            
+        var children = await _directoryScanService.LoadChildrenAsync(node, _currentScanOptions);
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            foreach (var child in children)
+            {
+                node.Children.Add(child);
+            }
+        });
     }
     
     public void SetTopLevel(TopLevel topLevel) => _topLevel = topLevel;
@@ -43,7 +74,7 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task ShowScanOptionsWindowAsync()
     {
-        if (_topLevel == null) 
+        if (_topLevel is null) 
             return;
         
         var scanOptionsWindow = new ScanOptionsWindow
@@ -51,61 +82,34 @@ public partial class MainWindowViewModel : ObservableObject
             DataContext = new ScanOptionsWindowViewModel()
         };
 
-        if(_topLevel is Window window)
-            await scanOptionsWindow.ShowDialog(window);
-    }
-    
-    [RelayCommand]
-    private async Task AddDirectoryAsync()
-    {
-        var storageProvider = _topLevel?.StorageProvider;
-        if (storageProvider == null) 
-            return;
-        
-        var folders = await storageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        if (_topLevel is Window window)
         {
-            AllowMultiple = true,
-            Title = "Select directories to scan"
-        });
-
-        foreach (var folder in folders)
-        {
-            var rootNode = new TreeNode
+            var result = await scanOptionsWindow.ShowDialog<ScanOptions?>(window);
+            if (result != null)
             {
-                Name = folder.Name,
-                FullPath = folder.Path.LocalPath,
-                IsDirectory = true,
-                Size = DirSize(new DirectoryInfo(folder.Path.LocalPath)),
-                LastModified = Directory.GetLastWriteTime(folder.Path.LocalPath),
-                Depth = 0,
-                Parent = null
-            };
+                _currentScanOptions = result;
 
-            // Add a dummy child to indicate it can be expanded
-            rootNode.Children.Add(new TreeNode { Name = "Loading...", Depth = 1, Parent = rootNode });
+                // Clear existing roots
+                Roots.Clear();
 
-            Roots.Add(rootNode);
+                // Add directories from scan options to Roots
+                foreach (var directoryPath in _currentScanOptions.DirectoriesToScan.Where(Directory.Exists))
+                {
+                    var rootNode =  DirectoryScanService.CreateRootNode(directoryPath);
+                    
+                    Roots.Add(rootNode);
+                }
+
+                // Load children for all roots and expand them
+                foreach (var root in Roots)
+                {
+                    await LoadChildrenForNodeAsync(root);
+                    root.IsExpanded = true;
+                }
+            }
         }
     }
-    
-    private static long DirSize(DirectoryInfo d) 
-    {    
-        long size = 0;    
-        // Add file sizes.
-        FileInfo[] fis = d.GetFiles();
-        foreach (FileInfo fi in fis) 
-        {      
-            size += fi.Length;    
-        }
-        // Add subdirectory sizes.
-        DirectoryInfo[] dis = d.GetDirectories();
-        foreach (DirectoryInfo di in dis) 
-        {
-            size += DirSize(di);   
-        }
-        return size;  
-    }
-
+   
     [RelayCommand]
     private Task ToggleExpand(TreeNode node)
     {
@@ -113,100 +117,5 @@ public partial class MainWindowViewModel : ObservableObject
         // The OnIsExpandedChanged partial method in TreeNode will handle lazy loading
         node.IsExpanded = !node.IsExpanded;
         return Task.CompletedTask;
-    }
-
-    private async Task LoadChildrenAsync(TreeNode node)
-    {
-        node.IsLoading = true;
-
-        try
-        {
-            await Task.Run(() =>
-            {
-                var dirInfo = new DirectoryInfo(node.FullPath);
-                
-                // Get subdirectories
-                try
-                {
-                    foreach (var dir in dirInfo.GetDirectories())
-                    {
-                        try
-                        {
-                            var childNode = new TreeNode
-                            {
-                                Name = dir.Name,
-                                FullPath = dir.FullName,
-                                IsDirectory = true,
-                                Size = DirSize(dir),
-                                LastModified = dir.LastWriteTime,
-                                Depth = node.Depth + 1,
-                                Parent = node
-                            };
-                            
-                            // Check if directory has subdirectories or files
-                            try
-                            {
-                                if (dir.GetDirectories().Length > 0 || (IncludeFiles && dir.GetFiles().Length > 0))
-                                {
-                                    // Add a dummy child to indicate it can be expanded
-                                    childNode.Children.Add(new TreeNode { Name = "Loading...", Depth = childNode.Depth + 1, Parent = childNode });
-                                }
-                            }
-                            catch { /* Ignore access errors for nested directories */ }
-
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() => node.Children.Add(childNode));
-                        }
-                        catch { /* Ignore directories we can't access */ }
-                    }
-                }
-                catch { /* Ignore access errors */ }
-
-                // Get files if IncludeFiles is enabled
-                if (IncludeFiles)
-                {
-                    try
-                    {
-                        foreach (var file in dirInfo.GetFiles())
-                        {
-                            try
-                            {
-                                var childNode = new TreeNode
-                                {
-                                    Name = file.Name,
-                                    FullPath = file.FullName,
-                                    IsDirectory = false,
-                                    Size = file.Length,
-                                    LastModified = file.LastWriteTime,
-                                    Depth = node.Depth + 1,
-                                    Parent = node
-                                };
-
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() => node.Children.Add(childNode));
-                            }
-                            catch { /* Ignore files we can't access */ }
-                        }
-                    }
-                    catch { /* Ignore access errors */ }
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            // Handle access denied or other errors
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                node.Children.Add(new TreeNode 
-                { 
-                    Name = $"Error: {ex.Message}", 
-                    Depth = node.Depth + 1, 
-                    Parent = node,
-                    IsDirectory = false
-                });
-            });
-        }
-        finally
-        {
-            node.IsLoading = false;
-        }
     }
 }
