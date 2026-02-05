@@ -3,6 +3,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Models.TreeDataGrid;
 using Declutterer.ViewModels;
 using Declutterer.Models;
+using System;
+using Avalonia.Media;
 
 namespace Declutterer.Views;
 
@@ -22,42 +24,56 @@ public partial class MainWindow : Window
     protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
     {
         base.OnLoaded(e);
-
+   
         if (DataContext is MainWindowViewModel viewModel)
         {
-            // Find the TreeDataGrid and set up the hierarchical source
+            // finding TreeDataGrid control and setting up the hierarchical data source for it
             var treeDataGrid = this.FindControl<TreeDataGrid>("TreeDataGrid");
             if (treeDataGrid != null)
             {
-                // Create a hierarchical tree data grid source that knows about the Children collection
                 var source = new HierarchicalTreeDataGridSource<TreeNode>(viewModel.Roots)
                 {
                     Columns =
                     {
                         new HierarchicalExpanderColumn<TreeNode>(
-                            new TextColumn<TreeNode, string>("Name", x => x.Name),
+                            new TextColumn<TreeNode, string>("Name", x => x.Name, options: new TextColumnOptions<TreeNode>
+                            {
+                                TextTrimming = TextTrimming.PrefixCharacterEllipsis,
+                                CanUserResizeColumn = true,
+                                MaxWidth = new GridLength(400)
+                            }),
                             x => x.Children,
                             x => x.HasChildren,
                             x => x.IsExpanded),
-                        new TextColumn<TreeNode, long>("Size", x => x.Size),
-                        new TextColumn<TreeNode, System.DateTime?>("Last Modified", x => x.LastModified),
-                        new TextColumn<TreeNode, string>("Path", x => x.FullPath),
+                        new TextColumn<TreeNode, string>("Size", x => x.SizeFormatted,
+                            options: new TextColumnOptions<TreeNode>
+                            {
+                                TextAlignment = TextAlignment.Right,
+                            }),
+
+                        new TextColumn<TreeNode, DateTime?>("Last Modified", x => x.LastModified),
+                        new TextColumn<TreeNode, string>("Path", x => x.FullPath, options: new TextColumnOptions<TreeNode>
+                        {
+                            TextTrimming = TextTrimming.PathSegmentEllipsis,
+                            // MaxWidth = new GridLength((GetTopLevel(this)?.Bounds.Width ?? 900) / 3),
+                            // CanUserResizeColumn = true,
+                            // CanUserSortColumn = true
+                        }),
                     }
                 };
                 
-                // Subscribe to row expanding event to trigger lazy loading
+                // sub to row expanding event to trigger lazy loading
                 source.RowExpanding += async (sender, args) =>
                 {
-                    if (args.Row.Model is TreeNode node && node.IsDirectory && node.HasChildren)
+                    if (args.Row.Model is { IsDirectory: true, HasChildren: true } node)
                     {
-                        if (node.Children.Count == 0)
+                        if (node.Children.Count == 0) // if children not loaded yet then load them
                         {
-                            // Load children and wait for completion
                             await viewModel.LoadChildrenForNodeAsync(node);
                         }
                         
                         // Pre-load grandchildren for any child directories that don't have their children loaded yet
-                        foreach (var child in node.Children.Where(c => c.IsDirectory && c.HasChildren && c.Children.Count == 0))
+                        foreach (var child in node.Children.Where(c => c is { IsDirectory: true, HasChildren: true, Children.Count: 0 }))
                         {
                             _ = viewModel.LoadChildrenForNodeAsync(child);
                         }
@@ -66,13 +82,13 @@ public partial class MainWindow : Window
                 
                 source.RowCollapsing += (sender, args) =>
                 {
-                    if (args.Row.Model is TreeNode node)
+                    if (args.Row.Model is TreeNode node) // setting IsExpanded to false on collapse for the node
                     {
                         node.IsExpanded = false;
                     }
                 };
                 
-                treeDataGrid.Source = source;
+                treeDataGrid.Source = source; // assigning the source to the TreeDataGrid so that it can display the data
             }
         }
     }

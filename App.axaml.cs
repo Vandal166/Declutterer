@@ -7,6 +7,7 @@ using Avalonia.Markup.Xaml;
 using Declutterer.ViewModels;
 using Declutterer.Views;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 
 namespace Declutterer;
 
@@ -15,6 +16,17 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        
+#if DEBUG
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Debug()
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .CreateLogger();
+#else
+    Log.Logger = new LoggerConfiguration()
+        .MinimumLevel.Fatal()
+        .CreateLogger();
+#endif
     }
 
     public override void OnFrameworkInitializationCompleted()

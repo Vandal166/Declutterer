@@ -3,6 +3,7 @@
     Icon="/Assets/avalonia-logo.ico"
     Title="Scan Options"
     Width="450"
+    WindowStartupLocation="CenterScreen"
     d:DesignHeight="700"
     d:DesignWidth="450"
     mc:Ignorable="d"

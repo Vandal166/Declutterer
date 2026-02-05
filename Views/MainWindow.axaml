@@ -1,12 +1,16 @@
 <Window
+    Height="800"
     Icon="/Assets/avalonia-logo.ico"
     Title="Declutterer"
+    Width="1200"
+    WindowStartupLocation="CenterScreen"
     d:DesignHeight="450"
     d:DesignWidth="800"
     mc:Ignorable="d"
     x:Class="Declutterer.Views.MainWindow"
     x:DataType="vm:MainWindowViewModel"
     xmlns="https://github.com/avaloniaui"
+    xmlns:avalonia="clr-namespace:LoadingIndicators.Avalonia;assembly=LoadingIndicators.Avalonia"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="using:Declutterer.ViewModels"
@@ -19,6 +23,7 @@
         -->
         <vm:MainWindowViewModel />
     </Design.DataContext>
+
 
     <Grid RowDefinitions="Auto,*">
         <!--  Toolbar  -->
@@ -36,6 +41,7 @@
         <Grid Grid.Row="1" Margin="10,0,10,10">
             <!--  TreeDataGrid with hierarchical display  -->
             <TreeDataGrid
+                Foreground="{Binding IsAnyNodeLoading, Converter={StaticResource BooleanToBrushConverter}}"
                 Grid.Row="0"
                 IsVisible="{Binding Roots.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
                 Margin="10,0,10,10"
@@ -48,6 +54,18 @@
                 IsVisible="{Binding Roots.Count, Converter={StaticResource ZeroToBooleanConverter}}"
                 Text="No scan performed. Perform an scan first"
                 VerticalAlignment="Center" />
+
+            <!--  Loading Spinner  -->
+            <avalonia:LoadingIndicator
+                Height="100"
+                HorizontalAlignment="Center"
+                IsActive="{Binding IsAnyNodeLoading}"
+                Mode="Arc"
+                SpeedRatio="1.2"
+                VerticalAlignment="Center"
+                Width="100" />
         </Grid>
     </Grid>
+
+
 </Window>

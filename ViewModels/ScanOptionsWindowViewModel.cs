@@ -36,7 +36,7 @@ public sealed partial class ScanOptionsWindowViewModel : ObservableObject
     }
     
     [RelayCommand]
-    private void OnScan() // Perform Scan
+    private void OnScan() // trigger Scan
     {
         // TODO validate?
         // Calculate DateTime values before returning
