@@ -1,4 +1,6 @@
-﻿using System.Collections.ObjectModel;
+﻿using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -99,26 +101,50 @@ public sealed partial class MainWindowViewModel : ObservableObject
             {
                 _currentScanOptions = result;
 
-                // Clear existing roots
                 Roots.Clear();
 
-                // Add directories from scan options to Roots
+                var validRoots = new List<TreeNode>();
                 foreach (var directoryPath in _currentScanOptions.DirectoriesToScan.Where(Directory.Exists))
                 {
-                    var rootNode =  DirectoryScanService.CreateRootNode(directoryPath);
-                    
-                    Roots.Add(rootNode);
+                    try
+                    {
+                        var rootNode = DirectoryScanService.CreateRootNode(directoryPath);
+                        Roots.Add(rootNode);
+                        validRoots.Add(rootNode);
+                    }
+                    catch (UnauthorizedAccessException){/*skip*/}
                 }
+
+                IsAnyNodeLoading = true;
                 var sw = new Stopwatch();
                 sw.Start();
-                // Load children for all roots and expand them
-                foreach (var root in Roots)
+                
+                try
                 {
-                    await LoadChildrenForNodeAsync(root);
-                    root.IsExpanded = true;
+                    // Load children for all roots in parallel - returns a dictionary mapping each root to its children
+                    var childrenByRoot = await _directoryScanService.LoadChildrenForMultipleRootsAsync(validRoots, _currentScanOptions);
+
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        foreach (var root in validRoots)
+                        {
+                            if (childrenByRoot.TryGetValue(root, out var children)) // if we got children for this root then add them to the root's Children collection
+                            {
+                                foreach (var child in children)
+                                {
+                                    root.Children.Add(child);
+                                }
+                                root.IsExpanded = true;
+                            }
+                        }
+                    });
                 }
-                sw.Stop();
-                Log.Information("Initial scan completed in {ElapsedMilliseconds} ms", sw.ElapsedMilliseconds);
+                finally
+                {
+                    sw.Stop();
+                    IsAnyNodeLoading = false;
+                    Log.Information("Initial scan completed in {ElapsedMilliseconds} ms", sw.ElapsedMilliseconds);
+                }
             }
         }
     }
@@ -126,8 +152,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private Task ToggleExpand(TreeNode node)
     {
-        // Simply toggle the expanded state
-        // The OnIsExpandedChanged partial method in TreeNode will handle lazy loading
         node.IsExpanded = !node.IsExpanded;
         return Task.CompletedTask;
     }

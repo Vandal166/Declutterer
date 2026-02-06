@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.IO.Enumeration;
+using System.Threading;
 using System.Threading.Tasks;
 using Declutterer.Models;
 using Microsoft.Extensions.Logging;
@@ -10,56 +9,11 @@ using Serilog;
 
 namespace Declutterer.Services;
 
-public sealed class DirectoryEnumerator : FileSystemEnumerator<string>
-{
-    //private readonly IFileSystemEntry _directoryFilter;
-    private readonly ScanFilterService _scanFilterService;
-    private readonly Func<TreeNode, bool> _filter;
-    public DirectoryEnumerator(string root, /*IFileSystemEntry directoryFilter,*/ FileAttributes attributesToSkip, ScanFilterService scanFilterService, Func<TreeNode, bool> filter)
-        : base
-        (
-            root,
-            new EnumerationOptions
-            {
-                IgnoreInaccessible = true, // Skip directories we can't access
-                RecurseSubdirectories = false,
-                ReturnSpecialDirectories = false,
-                AttributesToSkip = attributesToSkip,
-                BufferSize = 65536, // 64KB buffer size
-            }
-        )
-    {
-        _scanFilterService = scanFilterService;
-        _filter = filter;
-        //_directoryFilter = directoryFilter;
-    }
-
-    protected override bool ShouldIncludeEntry(ref FileSystemEntry entry)
-    {
-        if (!entry.IsDirectory)
-            return false; // Only process directories
-        
-        var node = new TreeNode
-        {
-            Name = entry.FileName.ToString(),
-            FullPath = entry.ToFullPath(),
-            IsDirectory = true,
-            Size = 0, // Size will be calculated later if needed
-            LastModified = entry.LastWriteTimeUtc.DateTime,
-            Depth = 0 // Depth will be set later
-        };
-        return _filter(node);
-        
-        //return !_directoryFilter.ShouldSkip(ref entry); // Apply the directory filter
-    }
-
-    protected override string TransformEntry(ref FileSystemEntry entry)
-        => entry.FileName.ToString();
-}
 public sealed class DirectoryScanService
 {
     private readonly ScanFilterService _scanFilterService;
     private readonly ILogger<DirectoryScanService> _logger;
+    private readonly Lock _scanLock = new();
     
     public DirectoryScanService(ScanFilterService scanFilterService, ILogger<DirectoryScanService> logger)
     {
@@ -102,9 +56,7 @@ public sealed class DirectoryScanService
              // Run the directory scanning on a background thread to avoid blocking the UI
             await Task.Run(() =>
             {
-                var filter = scanOptions != null 
-                    ? _scanFilterService.CreateFilter(scanOptions)
-                    : null;
+                var filter = _scanFilterService.CreateFilter(scanOptions);
                 
                 var dirInfo = new DirectoryInfo(node.FullPath);
                 
@@ -128,15 +80,7 @@ public sealed class DirectoryScanService
         // Get subdirectories
         try
         {
-            // using (var enumerator = new DirectoryEnumerator(dirInfo.FullName, FileAttributes.Hidden | FileAttributes.System,
-            //            _scanFilterService, filter ?? (_ => true))) // if no filter provided, include all
-            // {
-            //     while (enumerator.MoveNext())
-            //     {
-            //         
-            //     }
-            // }
-            foreach (var dir in dirInfo.GetDirectories()) //TODO GetDirectories vs EnumerateDirectories? Benchmark?
+            foreach (var dir in dirInfo.GetDirectories())
             {
                 try
                 {
@@ -171,6 +115,8 @@ public sealed class DirectoryScanService
         {
             _logger.LogWarning(ex, "Error reading subdirectories from: {DirectoryPath}", dirInfo.FullName);
         }
+        
+        _logger.LogInformation("Loaded {ChildrenCount} subdirectories for node: {NodePath}", children.Count, parentNode.FullPath);
     }
     
     private void LoadFiles(TreeNode parentNode, DirectoryInfo dirInfo, Func<TreeNode, bool>? filter, List<TreeNode> children)
@@ -210,7 +156,111 @@ public sealed class DirectoryScanService
             _logger.LogWarning(e, "Error reading files from: {DirectoryPath}", dirInfo.FullName);
         }
     }
+    
 
+    /// <summary>
+    /// Parallelized approach for loading subdirectories from a single directory.
+    /// Processes directory entries concurrently across CPU cores.
+    /// </summary>
+    private void LoadSubdirectoriesParallel(TreeNode parentNode, DirectoryInfo dirInfo, Func<TreeNode, bool>? filter, List<TreeNode> children)
+    {
+        try
+        {
+            var directories = dirInfo.GetDirectories();
+            var childNodes = new List<TreeNode>();
+            
+            Parallel.ForEach(directories, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, dir =>
+            {
+                try
+                {
+                    bool hasSubDirs = dir.GetDirectories().Length > 0 || (dir.GetFiles().Length > 0);
+
+                    var childNode = new TreeNode
+                    {
+                        Name = dir.Name,
+                        FullPath = dir.FullName,
+                        IsDirectory = true,
+                        Size = CalculateDirectorySize(dir),
+                        LastModified = dir.LastWriteTime,
+                        Depth = parentNode.Depth + 1,
+                        Parent = parentNode,
+                        HasChildren = hasSubDirs
+                    };
+                    
+                    if (filter != null && !filter(childNode))
+                        return;
+
+                    using (_scanLock.EnterScope())
+                    {
+                        childNodes.Add(childNode);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not access subdirectory: {DirectoryName}", dir.FullName);
+                }
+            });
+            
+            children.AddRange(childNodes);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error reading subdirectories from: {DirectoryPath}", dirInfo.FullName);
+        }
+        
+        _logger.LogInformation("Loaded {ChildrenCount} subdirectories for node: {NodePath}", children.Count, parentNode.FullPath);
+    }
+
+    /// <summary>
+    /// Asynchronously loads children for multiple root directories in parallel.
+    /// This is optimized for the initial scan where multiple directories are processed concurrently.
+    /// Returns a dictionary mapping each root node to its children.
+    /// </summary>
+    public async Task<Dictionary<TreeNode, List<TreeNode>>> LoadChildrenForMultipleRootsAsync(IEnumerable<TreeNode> rootNodes, ScanOptions? scanOptions)
+    {
+        var childrenByRoot = new Dictionary<TreeNode, List<TreeNode>>();
+        
+        return await Task.Run(() =>
+        {
+            var filter = _scanFilterService.CreateFilter(scanOptions);
+            
+            Parallel.ForEach(rootNodes, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, rootNode =>
+            {
+                try
+                {
+                    var dirInfo = new DirectoryInfo(rootNode.FullPath);
+                    var children = new List<TreeNode>();
+                    
+                    LoadSubdirectoriesParallel(rootNode, dirInfo, filter, children);
+                    LoadFiles(rootNode, dirInfo, filter, children);
+                    
+                    using (_scanLock.EnterScope())
+                    {
+                        childrenByRoot[rootNode] = children;
+                    }
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Skip directories we don't have access to
+                    using (_scanLock.EnterScope())
+                    {
+                        childrenByRoot[rootNode] = new List<TreeNode>(); // set empty list for roots we cant access
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error loading children for root: {NodePath}", rootNode.FullPath);
+                    using (_scanLock.EnterScope())
+                    {
+                        childrenByRoot[rootNode] = new List<TreeNode>();
+                    }
+                }
+            });
+            
+            return childrenByRoot;
+        });
+    }
+    
     
     // Recursively calculates the size of a directory and returns it in bytes
     private static long CalculateDirectorySize(DirectoryInfo dir) 

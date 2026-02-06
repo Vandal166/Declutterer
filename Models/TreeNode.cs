@@ -48,12 +48,7 @@ public partial class TreeNode : ObservableObject
     public TreeNode? Parent { get; set; }
 
     // Children (lazy-initialized) - TreeDataGrid reads this for hierarchical display
-    private ObservableCollection<TreeNode> _children = new();
-    public ObservableCollection<TreeNode> Children
-    {
-        get => _children;
-        private set => _children = value;
-    }
+    public ObservableCollection<TreeNode> Children { get; private set; } = new();
 
     // Optional: Icon kind or type (for future)
     public string Extension => IsDirectory ? string.Empty : Path.GetExtension(FullPath);

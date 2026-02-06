@@ -10,8 +10,11 @@ public sealed class ScanFilterService
     /// </summary>
     /// <param name="options"></param>
     /// <returns>A function that takes a TreeNode and returns true if it passes the filter criteria, false otherwise.</returns>
-    public Func<TreeNode, bool> CreateFilter(ScanOptions options)
+    public Func<TreeNode, bool>? CreateFilter(ScanOptions? options)
     {
+        if(options is null)
+            return null; // No filter if options are null
+        
         var builder = new ScanFilterBuilder();
         
         if (options.AgeFilter is { UseModifiedDate: true, ModifiedBefore: not null })
