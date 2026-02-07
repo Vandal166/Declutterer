@@ -8,7 +8,7 @@ using Declutterer.Models;
 
 namespace Declutterer.ViewModels;
 
-public sealed partial class ScanOptionsWindowViewModel : ObservableObject
+public sealed partial class ScanOptionsWindowViewModel : ViewModelBase
 {
     [ObservableProperty]
     private ScanOptions scanOptions = new();

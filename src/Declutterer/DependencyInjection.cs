@@ -15,5 +15,6 @@ public static class DependencyInjection
         
         collection.AddSingleton<ScanFilterService>();
         collection.AddSingleton<DirectoryScanService>();
+        collection.AddSingleton<IIconLoader, IconLoaderService>();
     }
 }

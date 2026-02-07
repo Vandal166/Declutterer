@@ -96,7 +96,8 @@ public sealed class DirectoryScanService
                         LastModified = dir.LastWriteTime,
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
-                        HasChildren = hasSubDirs
+                        HasChildren = hasSubDirs,
+                        IsSelected = parentNode.IsSelected // inherit selection state from parent
                     };
                             
                     // Apply filter(filtering out nodes that dont match the criteria)
@@ -137,7 +138,8 @@ public sealed class DirectoryScanService
                         Size = file.Length,
                         LastModified = file.LastWriteTime,
                         Depth = parentNode.Depth + 1,
-                        Parent = parentNode
+                        Parent = parentNode,
+                        IsSelected = parentNode.IsSelected // inherit selection state from parent
                     };
 
                     if (filter != null && !filter(childNode))
@@ -184,7 +186,8 @@ public sealed class DirectoryScanService
                         LastModified = dir.LastWriteTime,
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
-                        HasChildren = hasSubDirs
+                        HasChildren = hasSubDirs,
+                        IsSelected = parentNode.IsSelected // inherit selection state from parent
                     };
                     
                     if (filter != null && !filter(childNode))

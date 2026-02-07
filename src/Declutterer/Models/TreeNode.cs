@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Declutterer.Common;
 
@@ -50,6 +51,8 @@ public partial class TreeNode : ObservableObject
     // Children (lazy-initialized) - TreeDataGrid reads this for hierarchical display
     public ObservableCollection<TreeNode> Children { get; private set; } = new();
 
+    public Bitmap? Icon { get; set; } // The icon associated with this node (file or folder), loaded asynchronously could be null
+    
     // Optional: Icon kind or type (for future)
     public string Extension => IsDirectory ? string.Empty : Path.GetExtension(FullPath);
 }

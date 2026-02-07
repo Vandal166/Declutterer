@@ -23,7 +23,7 @@ public sealed class ScanFilterBuilder
     
     public ScanFilterBuilder WithSizeFilter(long sizeThresholdInBytes)
     {
-        _criteria.Add(node => node.Size <= sizeThresholdInBytes);
+        _criteria.Add(node => node.Size > sizeThresholdInBytes);
         return this;
     }
     

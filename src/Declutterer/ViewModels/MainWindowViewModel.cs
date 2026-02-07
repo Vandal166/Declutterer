@@ -15,14 +15,14 @@ using Serilog;
 
 namespace Declutterer.ViewModels;
 
-public sealed partial class MainWindowViewModel : ObservableObject
+public partial class MainWindowViewModel : ViewModelBase
 {
     // ObservableProperty is used to generate the property with INotifyPropertyChanged implementation which will notify the UI when the property changes
     [ObservableProperty]
     private bool _isAnyNodeLoading = false; // used for showing loading indicator on the UI
     
     private readonly DirectoryScanService _directoryScanService;
-    
+    private readonly IIconLoader _iconLoaderService;
     private ScanOptions? _currentScanOptions;
     private TopLevel? _topLevel;
     
@@ -30,10 +30,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
     // TreeDataGrid will automatically handle hierarchical display using the Children collection
     public ObservableCollection<TreeNode> Roots { get; } = new();
     
-    public MainWindowViewModel(DirectoryScanService directoryScanService)
+    public ObservableCollection<TreeNode> SelectedNodes { get; } = new(); // the currently selected nodes in the TreeDataGrid
+    
+    public MainWindowViewModel(DirectoryScanService directoryScanService, IIconLoader iconLoaderService)
     {
         _directoryScanService = directoryScanService;
+        _iconLoaderService = iconLoaderService;
     }
+
+    public MainWindowViewModel() { } // for designer
 
     public async Task LoadChildrenForNodeAsync(TreeNode node)
     {
@@ -148,11 +153,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
         }
     }
-   
+    
     [RelayCommand]
-    private Task ToggleExpand(TreeNode node)
+    private async Task ShowCleanupWindowAsync()
     {
-        node.IsExpanded = !node.IsExpanded;
-        return Task.CompletedTask;
+        if (SelectedNodes.Count == 0)
+            return;
+
+        foreach (var node in SelectedNodes)
+        {
+            var icon = await _iconLoaderService.LoadIconAsync(node.FullPath, node.IsDirectory);
+            node.Icon = icon; // Update the node's icon property with the loaded icon, this
+        }
+        var cleanupWindow = new CleanupWindow
+        {
+            DataContext = new CleanupWindowViewModel(SelectedNodes.ToList()) // passing the selected nodes to the CleanupWindowViewModel so it can display them and perform cleanup actions
+        };
+        
+        if (_topLevel is Window window)
+        {
+            await cleanupWindow.ShowDialog(window);
+        }
     }
 }

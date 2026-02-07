@@ -27,15 +27,24 @@
 
     <Grid RowDefinitions="Auto,*">
         <!--  Toolbar  -->
-        <StackPanel
+        <Grid
+            ColumnDefinitions="Auto,*"
             Grid.Row="0"
-            Margin="10"
-            Orientation="Horizontal">
+            Margin="10">
             <Button
                 Command="{Binding ShowScanOptionsWindowCommand}"
                 Content="Perform Scan"
+                HorizontalAlignment="Left"
                 Margin="0,0,10,0" />
-        </StackPanel>
+            <Button
+                Background="CornflowerBlue"
+                Command="{Binding ShowCleanupWindowCommand}"
+                Content="Review &amp; Cleanup"
+                Grid.Column="1"
+                HorizontalAlignment="Right"
+                IsEnabled="{Binding SelectedNodes.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
+                Margin="0,0,10,0" />
+        </Grid>
 
         <!--  Main Content Area  -->
         <Grid Grid.Row="1" Margin="10,0,10,10">

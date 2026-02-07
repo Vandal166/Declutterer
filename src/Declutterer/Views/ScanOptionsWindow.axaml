@@ -94,7 +94,7 @@
         <HeaderedContentControl Classes="indented" Header="Size Filters">
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <CheckBox IsChecked="{Binding ScanOptions.EntrySizeFilter.UseSizeFilter}" VerticalAlignment="Center" />
-                <TextBlock Text="Larger than" VerticalAlignment="Center" />
+                <TextBlock Text="Include Larger than" VerticalAlignment="Center" />
                 <NumericUpDown
                     FormatString="N0"
                     MaxWidth="250"
