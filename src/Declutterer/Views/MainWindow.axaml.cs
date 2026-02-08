@@ -8,6 +8,7 @@ using System;
 using System.Threading.Tasks;
 using Avalonia.Media;
 using Avalonia.Input;
+using Avalonia.Layout;
 
 namespace Declutterer.Views;
 
@@ -32,6 +33,8 @@ public partial class MainWindow : Window
    //TODO overload the sorting for the columns? Since sometiems they sort wrong
    
    //TODO 2: alt + left click on Expander to expand ALL children recursively (can be done by checking if Alt key is pressed in RowExpanding event and then setting IsExpanded to true for all descendants)
+   
+   //TODO 3: Add an 'Clear' button to clear the whole TreeDataGrid
         if (DataContext is MainWindowViewModel viewModel)
         {
             // finding TreeDataGrid control and setting up the hierarchical data source for it
@@ -48,6 +51,7 @@ public partial class MainWindow : Window
                                 // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
                                 if(node is null)
                                     return null;
+                                //TODO make parent distinct from child nodes visually
                                 
                                 // Don't create checkbox for root nodes (Depth == 0)
                                 if (node.Depth == 0)
@@ -58,7 +62,8 @@ public partial class MainWindow : Window
                                 
                                 var checkBox = new CheckBox
                                 {
-                                    IsChecked = node.IsSelected
+                                    IsChecked = node.IsSelected,
+                                    HorizontalAlignment = HorizontalAlignment.Center
                                 };
                                 
                                 // Sync from CheckBox to TreeNode
@@ -122,17 +127,18 @@ public partial class MainWindow : Window
                         }),
                     }
                 };
-                
                 // sub to row expanding event to trigger lazy loading
                 source.RowExpanding += async (sender, args) =>
                 {
-                    if (args.Row.Model is { IsDirectory: true, HasChildren: true } node)
+                    if (args.Row.Model is { IsDirectory: true, HasChildren: true} node)
                     {
-                        if (node.Children.Count == 0) // if children not loaded yet then load them
+                        // if children not loaded yet then load them and skip loading children for root nodes since we already load them with children in the initial scan
+                        // NOTE: this fixed the duplicate entries issue
+                        if (node.Children.Count == 0 && node.Depth != 0) 
                         {
                             await viewModel.LoadChildrenForNodeAsync(node);
                         }
-                        
+                       
                         // Pre-load grandchildren for any child directories that don't have their children loaded yet
                         foreach (var child in node.Children.Where(c => c is { IsDirectory: true, HasChildren: true, Children.Count: 0 }))
                         {

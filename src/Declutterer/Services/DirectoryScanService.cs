@@ -87,6 +87,9 @@ public sealed class DirectoryScanService
                     // Check if directory has any subdirectories or files but only if IncludeFiles is enabled
                     bool hasSubDirs = dir.GetDirectories().Length > 0 || (dir.GetFiles().Length > 0 /*&& (_currentScanOptions?.IncludeFiles == true)*/); //TODO this will be added later, for now we dont include files
 
+                    //TODO:
+                    // we coudl just change the filter so that it accepts only the necessary info instead of creating TreeNode first and then filtering,
+                    // this way we can filter out more efficiently without creating TreeNode and calculating directory shit
                     var childNode = new TreeNode
                     {
                         Name = dir.Name,

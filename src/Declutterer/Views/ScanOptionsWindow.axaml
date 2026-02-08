@@ -22,107 +22,11 @@
         -->
         <viewModels:ScanOptionsWindowViewModel />
     </Design.DataContext>
-
-    <StackPanel Margin="20" Spacing="16">
-
-        <!--  Title  -->
-        <TextBlock
-            FontSize="18"
-            FontWeight="Bold"
-            Text="Configure Scan" />
-
-        <!--  Locations  -->
-        <HeaderedContentControl Classes="indented" Header="Locations">
-            <StackPanel Spacing="6">
-                <CheckBox Content="Desktop" />
-                <CheckBox Content="Downloads" />
-                <CheckBox Content="Documents" />
-
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Command="{Binding AddDirectoryCommand}" Content="Add Folder…" />
-                    <TextBlock
-                        FontSize="12"
-                        Opacity="0.7"
-                        Text="Custom folders supported"
-                        VerticalAlignment="Center" />
-                </StackPanel>
-            </StackPanel>
-        </HeaderedContentControl>
-
-        <!--  Age Rules  -->
-        <HeaderedContentControl Classes="indented" Header="Age Filters">
-            <StackPanel Spacing="8">
-
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <CheckBox HorizontalAlignment="Center" IsChecked="{Binding ScanOptions.AgeFilter.UseModifiedDate}" />
-                    <TextBlock Text="Not modified in last" VerticalAlignment="Center" />
-                    <NumericUpDown
-                        ClipValueToMinMax="True"
-                        FormatString="N0"
-                        MaxWidth="160"
-                        Maximum="120"
-                        MinWidth="120"
-                        Minimum="1"
-                        Value="{Binding ScanOptions.AgeFilter.MonthsModifiedValue}"
-                        VerticalAlignment="Center" />
-                    <TextBlock Text="months" VerticalAlignment="Center" />
-                </StackPanel>
-
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <CheckBox IsChecked="{Binding ScanOptions.AgeFilter.UseAccessedDate}" VerticalAlignment="Center" />
-                    <TextBlock Text="Not accessed in last" VerticalAlignment="Center" />
-                    <NumericUpDown
-                        ClipValueToMinMax="True"
-                        FormatString="N0"
-                        MaxWidth="160"
-                        Maximum="120"
-                        MinWidth="120"
-                        Minimum="1"
-                        Value="{Binding ScanOptions.AgeFilter.MonthsAccessedValue}"
-                        VerticalAlignment="Center" />
-                    <TextBlock Text="months" VerticalAlignment="Center" />
-                </StackPanel>
-
-                <TextBlock
-                    FontSize="11"
-                    Opacity="0.6"
-                    Text="Access time may be unreliable on some systems" />
-            </StackPanel>
-        </HeaderedContentControl>
-
-        <!--  Size Rules  -->
-        <HeaderedContentControl Classes="indented" Header="Size Filters">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <CheckBox IsChecked="{Binding ScanOptions.EntrySizeFilter.UseSizeFilter}" VerticalAlignment="Center" />
-                <TextBlock Text="Include Larger than" VerticalAlignment="Center" />
-                <NumericUpDown
-                    FormatString="N0"
-                    MaxWidth="250"
-                    Maximum="100000"
-                    MinWidth="120"
-                    Minimum="1"
-                    Value="{Binding ScanOptions.EntrySizeFilter.SizeThreshold, TargetNullValue=1}" />
-                <TextBlock Text="MB" VerticalAlignment="Center" />
-            </StackPanel>
-        </HeaderedContentControl>
-
-        <!--  Other Options  -->
-        <HeaderedContentControl Header="Other">
-            <StackPanel Spacing="6">
-                <CheckBox Content="Include empty folders" />
-                <CheckBox Content="Find duplicate files (slow)" />
-            </StackPanel>
-        </HeaderedContentControl>
-
-        <!--  Buttons  -->
-        <Border
-            Background="{DynamicResource ThemeBorderLowBrush}"
-            Height="1"
-            Margin="0,8" />
-
-        <!--  Action Buttons  -->
+    <DockPanel>
         <StackPanel
+            DockPanel.Dock="Bottom"
             HorizontalAlignment="Right"
+            Margin="20,16,20,20"
             Orientation="Horizontal"
             Spacing="8">
             <Button
@@ -137,5 +41,105 @@
                 MinWidth="80" />
         </StackPanel>
 
-    </StackPanel>
+        <ScrollViewer DockPanel.Dock="Top">
+            <StackPanel Margin="20" Spacing="16">
+
+                <!--  Title  -->
+                <TextBlock
+                    FontSize="18"
+                    FontWeight="Bold"
+                    Text="Configure Scan" />
+
+                <!--  Locations  -->
+                <HeaderedContentControl Classes="indented" Header="Locations">
+                    <StackPanel Spacing="6">
+                        <CheckBox Content="Desktop" />
+                        <CheckBox Content="Downloads" />
+                        <CheckBox Content="Documents" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Command="{Binding AddDirectoryCommand}" Content="Add Folder…" />
+                            <TextBlock
+                                FontSize="12"
+                                Opacity="0.7"
+                                Text="Custom folders supported"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
+                </HeaderedContentControl>
+
+                <!--  Age Rules  -->
+                <HeaderedContentControl Classes="indented" Header="Age Filters">
+                    <StackPanel Spacing="8">
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <CheckBox HorizontalAlignment="Center" IsChecked="{Binding ScanOptions.AgeFilter.UseModifiedDate}" />
+                            <TextBlock Text="Not modified in last" VerticalAlignment="Center" />
+                            <NumericUpDown
+                                ClipValueToMinMax="True"
+                                FormatString="N0"
+                                MaxWidth="160"
+                                Maximum="120"
+                                MinWidth="120"
+                                Minimum="1"
+                                Value="{Binding ScanOptions.AgeFilter.MonthsModifiedValue}"
+                                VerticalAlignment="Center" />
+                            <TextBlock Text="months" VerticalAlignment="Center" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <CheckBox IsChecked="{Binding ScanOptions.AgeFilter.UseAccessedDate}" VerticalAlignment="Center" />
+                            <TextBlock Text="Not accessed in last" VerticalAlignment="Center" />
+                            <NumericUpDown
+                                ClipValueToMinMax="True"
+                                FormatString="N0"
+                                MaxWidth="160"
+                                Maximum="120"
+                                MinWidth="120"
+                                Minimum="1"
+                                Value="{Binding ScanOptions.AgeFilter.MonthsAccessedValue}"
+                                VerticalAlignment="Center" />
+                            <TextBlock Text="months" VerticalAlignment="Center" />
+                        </StackPanel>
+
+                        <TextBlock
+                            FontSize="11"
+                            Opacity="0.6"
+                            Text="Access time may be unreliable on some systems" />
+                    </StackPanel>
+                </HeaderedContentControl>
+
+                <!--  Size Rules  -->
+                <HeaderedContentControl Classes="indented" Header="Size Filters">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <CheckBox IsChecked="{Binding ScanOptions.EntrySizeFilter.UseSizeFilter}" VerticalAlignment="Center" />
+                        <TextBlock Text="Include Larger than" VerticalAlignment="Center" />
+                        <NumericUpDown
+                            FormatString="N0"
+                            MaxWidth="250"
+                            Maximum="100000"
+                            MinWidth="120"
+                            Minimum="1"
+                            Value="{Binding ScanOptions.EntrySizeFilter.SizeThreshold, TargetNullValue=1}" />
+                        <TextBlock Text="MB" VerticalAlignment="Center" />
+                    </StackPanel>
+                </HeaderedContentControl>
+
+                <!--  Other Options  -->
+                <HeaderedContentControl Header="Other">
+                    <StackPanel Spacing="6">
+                        <ToggleSwitch Content="Include empty folders" />
+                        <ToggleSwitch Content="Find duplicate files (slow)" />
+                    </StackPanel>
+                </HeaderedContentControl>
+
+                <!--  Buttons  -->
+                <Border
+                    Background="{DynamicResource ThemeBorderLowBrush}"
+                    Height="1"
+                    Margin="0,8" />
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
 </Window>

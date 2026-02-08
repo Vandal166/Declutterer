@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Declutterer.Common;
 using Declutterer.Models;
 using Declutterer.Services;
 using Declutterer.Views;
@@ -21,6 +22,9 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isAnyNodeLoading = false; // used for showing loading indicator on the UI
     
+    [ObservableProperty]
+    private long _selectedNodesSize = 0; // Total size of selected nodes
+    
     private readonly DirectoryScanService _directoryScanService;
     private readonly IIconLoader _iconLoaderService;
     private ScanOptions? _currentScanOptions;
@@ -30,15 +34,26 @@ public partial class MainWindowViewModel : ViewModelBase
     // TreeDataGrid will automatically handle hierarchical display using the Children collection
     public ObservableCollection<TreeNode> Roots { get; } = new();
     
-    public ObservableCollection<TreeNode> SelectedNodes { get; } = new(); // the currently selected nodes in the TreeDataGrid
+    public ObservableHashSet<TreeNode> SelectedNodes { get; } = new(); // the currently selected nodes in the TreeDataGrid
     
     public MainWindowViewModel(DirectoryScanService directoryScanService, IIconLoader iconLoaderService)
     {
         _directoryScanService = directoryScanService;
         _iconLoaderService = iconLoaderService;
+        
+        // Wire up selection change tracking
+        SelectedNodes.CollectionChanged += (s, e) =>
+        {
+            UpdateSelectedNodesSize();
+        };
     }
 
     public MainWindowViewModel() { } // for designer
+    
+    private void UpdateSelectedNodesSize()
+    {
+        SelectedNodesSize = SelectedNodes.Sum(n => n.Size);
+    }
 
     public async Task LoadChildrenForNodeAsync(TreeNode node)
     {
@@ -85,6 +100,14 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public void SetTopLevel(TopLevel topLevel) => _topLevel = topLevel;
+
+    [RelayCommand]
+    private void ClearAll()
+    {
+        Roots.Clear();
+        SelectedNodes.Clear();
+        _currentScanOptions = null;
+    }
 
     [RelayCommand]
     private async Task ShowScanOptionsWindowAsync()

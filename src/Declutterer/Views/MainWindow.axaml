@@ -1,8 +1,8 @@
 <Window
-    Height="800"
+    Height="900"
     Icon="/Assets/avalonia-logo.ico"
     Title="Declutterer"
-    Width="1200"
+    Width="1400"
     WindowStartupLocation="CenterScreen"
     d:DesignHeight="450"
     d:DesignWidth="800"
@@ -13,6 +13,7 @@
     xmlns:avalonia="clr-namespace:LoadingIndicators.Avalonia;assembly=LoadingIndicators.Avalonia"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib"
     xmlns:vm="using:Declutterer.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
@@ -25,44 +26,190 @@
     </Design.DataContext>
 
 
-    <Grid RowDefinitions="Auto,*">
-        <!--  Toolbar  -->
+    <Grid ColumnDefinitions="Auto,*" RowDefinitions="*,Auto">
+        <!--  LEFT SIDEBAR  -->
+        <Border
+            Background="#F5F5F5"
+            Grid.Column="0"
+            Grid.Row="0"
+            Grid.RowSpan="2"
+            MinWidth="200"
+            Padding="15,20"
+            VerticalAlignment="Top">
+            <StackPanel Orientation="Vertical" Spacing="20">
+
+                <!--  Logo/Title  -->
+                <TextBlock
+                    FontSize="18"
+                    FontWeight="SemiBold"
+                    Foreground="#333333"
+                    Text="📁 Declutterer" />
+
+                <Separator Background="#CCCCCC" Height="1" />
+
+                <!--  Navigation Buttons  -->
+                <StackPanel Orientation="Vertical" Spacing="8">
+                    <Button
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Command="{Binding ClearAllCommand}"
+                        Content="🏠 Home"
+                        Foreground="#333333"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,10" />
+
+                    <Button
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Command="{Binding ShowScanOptionsWindowCommand}"
+                        Content="⚙️  Scan Settings"
+                        Foreground="#333333"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Padding="12,10" />
+
+                    <Button
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Content="📜 History"
+                        Foreground="#999999"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        IsEnabled="False"
+                        Padding="12,10" />
+
+                    <Button
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Content="❓ Help"
+                        Foreground="#999999"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        IsEnabled="False"
+                        Padding="12,10" />
+                </StackPanel>
+
+                <Separator
+                    Background="#CCCCCC"
+                    Height="1"
+                    Margin="0,10" />
+
+                <!--  Quick Stats  -->
+                <StackPanel Orientation="Vertical" Spacing="12">
+                    <TextBlock
+                        FontSize="12"
+                        FontWeight="SemiBold"
+                        Foreground="#666666"
+                        Text="Scan Info" />
+
+                    <StackPanel Orientation="Vertical" Spacing="4">
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="#888888"
+                            Text="Roots Scanned:" />
+                        <TextBlock
+                            FontSize="13"
+                            FontWeight="Bold"
+                            Foreground="#333333"
+                            Text="{Binding Roots.Count}" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Vertical" Spacing="4">
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="#888888"
+                            Text="Items Selected:" />
+                        <TextBlock
+                            FontSize="13"
+                            FontWeight="Bold"
+                            Foreground="#333333"
+                            Text="{Binding SelectedNodes.Count}" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!--  MAIN CONTENT AREA  -->
         <Grid
-            ColumnDefinitions="Auto,*"
+            ColumnDefinitions="*"
+            Grid.Column="1"
             Grid.Row="0"
             Margin="10">
-            <Button
-                Command="{Binding ShowScanOptionsWindowCommand}"
-                Content="Perform Scan"
-                HorizontalAlignment="Left"
-                Margin="0,0,10,0" />
-            <Button
-                Background="CornflowerBlue"
-                Command="{Binding ShowCleanupWindowCommand}"
-                Content="Review &amp; Cleanup"
-                Grid.Column="1"
-                HorizontalAlignment="Right"
-                IsEnabled="{Binding SelectedNodes.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
-                Margin="0,0,10,0" />
-        </Grid>
 
-        <!--  Main Content Area  -->
-        <Grid Grid.Row="1" Margin="10,0,10,10">
             <!--  TreeDataGrid with hierarchical display  -->
             <TreeDataGrid
                 Foreground="{Binding IsAnyNodeLoading, Converter={StaticResource BooleanToBrushConverter}}"
                 Grid.Row="0"
                 IsVisible="{Binding Roots.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
-                Margin="10,0,10,10"
+                Margin="0"
                 Source="{Binding Roots}"
                 x:Name="TreeDataGrid" />
-            <TextBlock
-                FontSize="18"
-                Foreground="Gray"
+
+            <!--  Empty State - Hero Action  -->
+            <StackPanel
                 HorizontalAlignment="Center"
                 IsVisible="{Binding Roots.Count, Converter={StaticResource ZeroToBooleanConverter}}"
-                Text="No scan performed. Perform an scan first"
-                VerticalAlignment="Center" />
+                Orientation="Vertical"
+                Spacing="20"
+                VerticalAlignment="Center">
+                <!--  Large Icon  -->
+                <TextBlock
+                    FontSize="72"
+                    HorizontalAlignment="Center"
+                    Text="📁"
+                    VerticalAlignment="Center" />
+
+                <!--  Main Heading  -->
+                <TextBlock
+                    FontSize="28"
+                    FontWeight="SemiBold"
+                    Foreground="#333333"
+                    HorizontalAlignment="Center"
+                    Text="Ready to declutter?" />
+
+                <!--  Subtitle  -->
+                <TextBlock
+                    FontSize="14"
+                    Foreground="#666666"
+                    HorizontalAlignment="Center"
+                    Text="Select directories to scan and find large files and folders"
+                    TextAlignment="Center" />
+
+                <!--  Hero Action Button  -->
+                <Button
+                    Background="CornflowerBlue"
+                    Command="{Binding ShowScanOptionsWindowCommand}"
+                    Content="Start New Scan"
+                    FontSize="16"
+                    HorizontalAlignment="Center"
+                    Padding="24,12,24,12" />
+
+                <!--  Quick Tips Section  -->
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    Margin="0,20,0,0"
+                    Orientation="Vertical"
+                    Spacing="8">
+                    <TextBlock
+                        FontSize="12"
+                        FontWeight="SemiBold"
+                        Foreground="#999999"
+                        Text="Quick Tips:" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="#888888"
+                        Text="• Select one or more folders to analyze" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="#888888"
+                        Text="• Filter by file size, type, and age" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="#888888"
+                        Text="• Review and safely delete unwanted files" />
+                </StackPanel>
+            </StackPanel>
 
             <!--  Loading Spinner  -->
             <avalonia:LoadingIndicator
@@ -74,6 +221,53 @@
                 VerticalAlignment="Center"
                 Width="100" />
         </Grid>
+
+        <!--  BOTTOM SELECTION SUMMARY BAR  -->
+        <Border
+            Background="#2C3E50"
+            BorderBrush="#BDC3C7"
+            BorderThickness="0,1,0,0"
+            Grid.Column="0"
+            Grid.ColumnSpan="2"
+            Grid.Row="1"
+            IsVisible="{Binding SelectedNodes.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
+            Padding="15,12"
+            VerticalAlignment="Bottom">
+            <Grid ColumnDefinitions="Auto,*,Auto" HorizontalAlignment="Stretch">
+                <!--  Deselect All Button  -->
+                <Button
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Content="Deselect All"
+                    FontSize="13"
+                    Foreground="White"
+                    Grid.Column="0"
+                    HorizontalAlignment="Left"
+                    Padding="0,0,16,0" />
+
+                <!--  Selection Summary Text  -->
+                <TextBlock
+                    FontSize="14"
+                    Foreground="White"
+                    Grid.Column="1"
+                    VerticalAlignment="Center">
+                    <Run FontWeight="Bold" Text="{Binding SelectedNodes.Count}" />
+                    <Run Text=" items selected (" />
+                    <Run FontWeight="Bold" Text="{Binding SelectedNodesSize, StringFormat={x:Static sys:String.Empty}, ConverterParameter='N0'}" />
+                    <Run Text=" bytes)" />
+                </TextBlock>
+
+                <!--  Review & Cleanup Button  -->
+                <Button
+                    Background="CornflowerBlue"
+                    Command="{Binding ShowCleanupWindowCommand}"
+                    Content="Review &amp; Cleanup"
+                    FontSize="13"
+                    Grid.Column="2"
+                    HorizontalAlignment="Right"
+                    Padding="16,8" />
+            </Grid>
+        </Border>
     </Grid>
 
 

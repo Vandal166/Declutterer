@@ -2,6 +2,7 @@
     Height="600"
     Title="Cleanup Review"
     Width="800"
+    WindowStartupLocation="CenterScreen"
     d:DesignHeight="600"
     d:DesignWidth="800"
     mc:Ignorable="d"
@@ -17,28 +18,57 @@
         <vm:CleanupWindowViewModel />
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,*,Auto">
-        <!--  Header with Undo button  -->
-        <Grid
-            ColumnDefinitions="*,Auto"
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+        <!--  Summary Section - The Big Win  -->
+        <Border
+            Background="#F0F8FF"
+            BorderBrush="#4A90E2"
+            BorderThickness="1"
+            CornerRadius="4"
             Grid.Row="0"
             Margin="10">
+            <StackPanel
+                Margin="15"
+                Orientation="Vertical"
+                Spacing="5">
+                <TextBlock
+                    FontSize="18"
+                    FontWeight="Bold"
+                    Foreground="#1E40AF"
+                    Text="Storage Cleanup Summary" />
+                <TextBlock
+                    FontSize="14"
+                    FontWeight="SemiBold"
+                    Foreground="#2D5A2D"
+                    Text="{Binding TotalSizeFormatted, StringFormat='You are about to free up {0}!'}" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="#555555"
+                    Text="{Binding ItemsToDelete.Count, StringFormat='This will delete {0} item(s)'}" />
+            </StackPanel>
+        </Border>
+
+        <!--  Header with info and Deselect button  -->
+        <Grid
+            ColumnDefinitions="*,Auto"
+            Grid.Row="1"
+            Margin="10">
             <TextBlock
-                FontSize="16"
+                FontSize="14"
                 FontWeight="Bold"
                 Grid.Column="0"
-                Text="Entries to be deleted:" />
+                Text="Items to be deleted:" />
             <Button
-                Content="Undo"
+                Content="Deselect All"
                 Grid.Column="1"
                 HorizontalAlignment="Right"
                 Margin="10,0,0,0"
-                Padding="20,10" />
+                Padding="15,8" />
         </Grid>
 
         <!--  List of items  -->
         <ListBox
-            Grid.Row="1"
+            Grid.Row="2"
             ItemsSource="{Binding ItemsToDelete}"
             Margin="10">
             <ListBox.ItemTemplate>
@@ -67,21 +97,52 @@
             </ListBox.ItemTemplate>
         </ListBox>
 
-        <!--  Footer with buttons  -->
+        <!--  Safety Toggle and Footer with buttons  -->
+        <Border
+            Background="#FFF9E6"
+            BorderBrush="#FFD700"
+            BorderThickness="0,1,0,0"
+            Grid.Row="3"
+            Margin="10,5,10,0"
+            Padding="10">
+            <StackPanel
+                Orientation="Horizontal"
+                Spacing="15"
+                VerticalAlignment="Center">
+                <TextBlock
+                    FontSize="12"
+                    Foreground="#555555"
+                    Text="Deletion method:"
+                    VerticalAlignment="Center" />
+                <RadioButton
+                    Content="📁 Send to Recycle Bin (safer)"
+                    Foreground="#2D5A2D"
+                    GroupName="DeleteMethod"
+                    IsChecked="{Binding SendToRecycleBin}" />
+                <RadioButton
+                    Content="🔴 Permanent Delete"
+                    Foreground="#B22222"
+                    GroupName="DeleteMethod"
+                    IsChecked="{Binding !SendToRecycleBin}" />
+            </StackPanel>
+        </Border>
+
+        <!--  Action buttons  -->
         <Grid
-            ColumnDefinitions="Auto,*"
-            Grid.Row="2"
+            ColumnDefinitions="*,Auto,Auto"
+            Grid.Row="4"
             Margin="10">
             <Button
                 Content="Cancel"
-                Grid.Column="0"
-                HorizontalAlignment="Left"
+                Grid.Column="1"
+                HorizontalAlignment="Right"
+                Margin="0,0,10,0"
                 Padding="20,10" />
             <Button
-                Background="Red"
+                Background="#DC143C"
                 Content="Delete..."
                 Foreground="White"
-                Grid.Column="1"
+                Grid.Column="2"
                 HorizontalAlignment="Right"
                 Padding="20,10" />
         </Grid>
