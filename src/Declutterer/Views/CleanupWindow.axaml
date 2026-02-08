@@ -1,7 +1,7 @@
 ﻿<Window
-    Height="600"
+    Height="800"
     Title="Cleanup Review"
-    Width="800"
+    Width="900"
     WindowStartupLocation="CenterScreen"
     d:DesignHeight="600"
     d:DesignWidth="800"
@@ -18,7 +18,7 @@
         <vm:CleanupWindowViewModel />
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto">
         <!--  Summary Section - The Big Win  -->
         <Border
             Background="#F0F8FF"
@@ -57,45 +57,72 @@
                 FontSize="14"
                 FontWeight="Bold"
                 Grid.Column="0"
-                Text="Items to be deleted:" />
-            <Button
-                Content="Deselect All"
-                Grid.Column="1"
-                HorizontalAlignment="Right"
-                Margin="10,0,0,0"
-                Padding="15,8" />
+                Text="Items grouped by cleanup reason:" />
         </Grid>
 
-        <!--  List of items  -->
-        <ListBox
+        <!--  Grouped List of items (Scrollable)  -->
+        <ScrollViewer
             Grid.Row="2"
-            ItemsSource="{Binding ItemsToDelete}"
-            Margin="10">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <Grid ColumnDefinitions="Auto,*" Margin="5">
-                        <!--  Icon based on file/folder type  -->
-                        <Image
-                            Grid.Column="0"
-                            Height="32"
-                            Margin="0,0,10,0"
-                            Source="{Binding Icon}" />
-                        <!--  Item details  -->
-                        <StackPanel Grid.Column="1" Orientation="Vertical">
-                            <TextBlock FontWeight="Bold" Text="{Binding Name}" />
-                            <TextBlock
-                                FontSize="12"
-                                Foreground="Gray"
-                                Text="{Binding FullPath}" />
-                            <TextBlock
-                                FontSize="11"
-                                Foreground="Gray"
-                                Text="{Binding SizeFormatted}" />
-                        </StackPanel>
-                    </Grid>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+            Margin="10"
+            VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding GroupedItems}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border
+                            Background="#F5F5F5"
+                            BorderBrush="#CCCCCC"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Margin="0,0,0,10"
+                            Padding="10">
+                            <StackPanel Orientation="Vertical" Spacing="8">
+                                <!--  Group Header  -->
+                                <TextBlock
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    Foreground="#1E3A8A"
+                                    Text="{Binding GroupName}" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="#666666"
+                                    Text="{Binding GroupSizeFormatted, StringFormat='Total: {0}'}" />
+
+                                <!--  Items in group  -->
+                                <ItemsControl ItemsSource="{Binding Items}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid ColumnDefinitions="Auto,*" Margin="5,5,0,5">
+                                                <!--  Icon based on file/folder type  -->
+                                                <Image
+                                                    Grid.Column="0"
+                                                    Height="28"
+                                                    Margin="0,0,10,0"
+                                                    Source="{Binding Icon}" />
+                                                <!--  Item details  -->
+                                                <StackPanel
+                                                    Grid.Column="1"
+                                                    Orientation="Vertical"
+                                                    VerticalAlignment="Center">
+                                                    <TextBlock FontWeight="Bold" Text="{Binding Name}" />
+                                                    <TextBlock
+                                                        FontSize="11"
+                                                        Foreground="Gray"
+                                                        Text="{Binding FullPath}" />
+                                                    <TextBlock
+                                                        FontSize="10"
+                                                        Foreground="Gray"
+                                                        Text="{Binding SizeFormatted}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
 
         <!--  Safety Toggle and Footer with buttons  -->
         <Border
@@ -103,39 +130,94 @@
             BorderBrush="#FFD700"
             BorderThickness="0,1,0,0"
             Grid.Row="3"
-            Margin="10,5,10,0"
-            Padding="10">
-            <StackPanel
-                Orientation="Horizontal"
-                Spacing="15"
-                VerticalAlignment="Center">
+            Margin="10,5,0,10"
+            Padding="20,10">
+            <StackPanel Orientation="Vertical" Spacing="8">
                 <TextBlock
                     FontSize="12"
+                    FontWeight="SemiBold"
                     Foreground="#555555"
-                    Text="Deletion method:"
-                    VerticalAlignment="Center" />
-                <RadioButton
-                    Content="📁 Send to Recycle Bin (safer)"
-                    Foreground="#2D5A2D"
-                    GroupName="DeleteMethod"
-                    IsChecked="{Binding SendToRecycleBin}" />
-                <RadioButton
-                    Content="🔴 Permanent Delete"
-                    Foreground="#B22222"
-                    GroupName="DeleteMethod"
-                    IsChecked="{Binding !SendToRecycleBin}" />
+                    Text="Deletion method:" />
+
+                <!--  Safe option  -->
+                <Border
+                    Background="White"
+                    BorderBrush="#2D5A2D"
+                    BorderThickness="2"
+                    CornerRadius="4"
+                    Padding="10">
+                    <RadioButton
+                        Content="📁 Send to Recycle Bin (safer)"
+                        Foreground="#2D5A2D"
+                        GroupName="DeleteMethod"
+                        IsChecked="{Binding SendToRecycleBin}" />
+                </Border>
+
+                <!--  Danger option with warning  -->
+                <Border
+                    Background="White"
+                    BorderBrush="#DC143C"
+                    BorderThickness="3"
+                    CornerRadius="4"
+                    Padding="10">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <RadioButton
+                            Content="🔴 Permanent Delete (cannot be undone)"
+                            Foreground="#B22222"
+                            GroupName="DeleteMethod"
+                            IsChecked="{Binding !SendToRecycleBin}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!--  Progress bar (shown during deletion)  -->
+        <Border
+            Background="#F0F0F0"
+            BorderBrush="#CCCCCC"
+            BorderThickness="0,1,0,0"
+            Grid.Row="4"
+            IsVisible="{Binding IsDeletionInProgress}"
+            Margin="0,0,0,0"
+            Padding="20,10">
+            <StackPanel Orientation="Vertical" Spacing="5">
+                <StackPanel
+                    Orientation="Horizontal"
+                    Spacing="10"
+                    VerticalAlignment="Center">
+                    <TextBlock
+                        FontSize="12"
+                        FontWeight="SemiBold"
+                        Foreground="#333333"
+                        Text="Deleting files..." />
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="#666666"
+                        Text="{Binding DeletionProgress, StringFormat={}{0:F1}%}" />
+                </StackPanel>
+                <ProgressBar
+                    Background="#E0E0E0"
+                    Foreground="#4A90E2"
+                    Height="20"
+                    Maximum="100"
+                    Value="{Binding DeletionProgress}" />
+                <TextBlock
+                    FontSize="11"
+                    Foreground="#666666"
+                    Text="{Binding DeletionStatus}" />
             </StackPanel>
         </Border>
 
         <!--  Action buttons  -->
         <Grid
             ColumnDefinitions="*,Auto,Auto"
-            Grid.Row="4"
-            Margin="10">
+            Grid.Row="5"
+            Margin="20,10">
             <Button
                 Content="Cancel"
                 Grid.Column="1"
                 HorizontalAlignment="Right"
+                IsEnabled="{Binding !IsDeletionInProgress}"
                 Margin="0,0,10,0"
                 Padding="20,10" />
             <Button
@@ -144,6 +226,7 @@
                 Foreground="White"
                 Grid.Column="2"
                 HorizontalAlignment="Right"
+                IsEnabled="{Binding !IsDeletionInProgress}"
                 Padding="20,10" />
         </Grid>
     </Grid>
