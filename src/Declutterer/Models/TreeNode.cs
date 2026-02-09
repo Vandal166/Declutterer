@@ -22,7 +22,7 @@ public partial class TreeNode : ObservableObject
     [ObservableProperty]
     private long _size; // size in bytes
 
-    public string SizeFormatted => ConvertBytes.ToReadableString(Size);
+    public string SizeFormatted => ByteConverter.ToReadableString(Size);
     
     [ObservableProperty]
     private DateTime? _lastModified;

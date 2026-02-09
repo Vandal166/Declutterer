@@ -16,8 +16,6 @@ public sealed partial class ScanOptionsWindowViewModel : ViewModelBase
     public event Action<ScanOptions>? RequestClose;
     public void SetTopLevel(TopLevel topLevel) => _topLevel = topLevel;
     
-    //TODO display the selected directories in the UI and allow removing them from the list before starting the scan
-    
     [RelayCommand]
     private async Task OnAddDirectoryAsync()
     {
@@ -58,5 +56,11 @@ public sealed partial class ScanOptionsWindowViewModel : ViewModelBase
     private void OnCancel() // Cancel and close the window
     {
         RequestClose?.Invoke(null); // Notify subscribers with null to indicate cancellation
+    }
+
+    [RelayCommand]
+    private void OnRemoveDirectory(string directoryPath)
+    {
+        ScanOptions.DirectoriesToScan.Remove(directoryPath);
     }
 }

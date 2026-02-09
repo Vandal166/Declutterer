@@ -7,7 +7,7 @@ namespace Declutterer.Common;
 /// <summary>
 /// Class for converting byte counts to human-readable formats.
 /// </summary>
-public static class ConvertBytes
+public static class ByteConverter
 {
     private static readonly string[] Suffixes = { "B", "KB", "MB", "GB", "TB" };
     

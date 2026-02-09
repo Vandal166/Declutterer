@@ -50,9 +50,19 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
     private void CalculateTotalSize()
     {
         long totalBytes = ItemsToDelete.Sum(item => item.Size);
-        TotalSizeFormatted = ConvertBytes.ToReadableString(totalBytes);
+        TotalSizeFormatted = ByteConverter.ToReadableString(totalBytes);
     }
     
+    //TODO this has an issue:
+    // this will build and group together directories that are nested eachother, example:
+    // C:\Users\Kamilos\Downloads\Skyrim SE mods\mods\mods
+    // and C:\Users\Kamilos\Downloads\Skyrim SE mods\mods
+    // will be considered as separate items thus displaying double the amount of storage cleanup (MB/GB)
+    // This coule be fixed by:
+    // Changing the groupying where an 'Large direcotry' is considered only if it is the most-nested directory and exceeds the threshold OR the least-nested directory(the least as in from the root C:\Users\Kamilos\Downloads)
+    // Example:
+    // Most-nested is: C:\Users\Kamilos\Downloads\Skyrim SE mods\mods\mods\aMidianBorn Book of Silence SE\ - as this is the most nested directory that exceeds the threshold (size: 1.6 GB)
+    // Least-nested: C:\Users\Kamilos\Downloads\Skyrim SE mods - this directory is least-nested and exceeds the threshold (size: 76 GB)
     private void BuildGroupedItems()
     {
         GroupedItems.Clear();
@@ -145,7 +155,7 @@ public partial class ItemGroup : ObservableObject
         get
         {
             long totalBytes = Items.Sum(item => item.Size);
-            return ConvertBytes.ToReadableString(totalBytes);
+            return ByteConverter.ToReadableString(totalBytes);
         }
     }
 }

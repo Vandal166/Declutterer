@@ -23,10 +23,11 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool _isAnyNodeLoading = false; // used for showing loading indicator on the UI
     
     [ObservableProperty]
-    private long _selectedNodesSize = 0; // Total size of selected nodes
+    private string _selectedNodesSizeText = string.Empty; // a user-friendly string representation of the total size of the currently selected nodes
     
     private readonly DirectoryScanService _directoryScanService;
     private readonly IIconLoader _iconLoaderService;
+    
     private ScanOptions? _currentScanOptions;
     private TopLevel? _topLevel;
     
@@ -52,7 +53,8 @@ public partial class MainWindowViewModel : ViewModelBase
     
     private void UpdateSelectedNodesSize()
     {
-        SelectedNodesSize = SelectedNodes.Sum(n => n.Size);
+        var selectedNodesSize = SelectedNodes.Sum(n => n.Size);
+        SelectedNodesSizeText = ByteConverter.ToReadableString(selectedNodesSize);
     }
 
     public async Task LoadChildrenForNodeAsync(TreeNode node)
@@ -110,11 +112,38 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void DeselectAll()
+    {
+        foreach (var node in SelectedNodes.ToList())
+        {
+            node.IsSelected = false; // This will trigger the UI to uncheck the node and also update the SelectedNodes collection through the binding
+        }
+        SelectedNodes.Clear();
+    }
+    
+    [RelayCommand]
+    private void SmartSelect()
+    {
+        if (_currentScanOptions == null)
+            return;
+            
+        var sss = new SmartSelectionService(new SmartSelectionScorer());
+        
+        DeselectAll();
+        foreach (var rootChild in Roots)
+        {
+            var toSelect = sss.Select(rootChild, _currentScanOptions, new ScorerOptions());
+            foreach (var selectedNode in toSelect)
+            {
+                selectedNode.IsSelected = true; // Update the node's selection state for UI binding
+                SelectedNodes.Add(selectedNode);
+            }
+        }
+    }
+    
+    [RelayCommand]
     private async Task ShowScanOptionsWindowAsync()
     {
-        if (_topLevel is null) 
-            return;
-        
         var scanOptionsWindow = new ScanOptionsWindow
         {
             DataContext = new ScanOptionsWindowViewModel()

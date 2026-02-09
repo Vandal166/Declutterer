@@ -10,6 +10,7 @@
     x:Class="Declutterer.Views.ScanOptionsWindow"
     x:DataType="viewModels:ScanOptionsWindowViewModel"
     xmlns="https://github.com/avaloniaui"
+    xmlns:converters="clr-namespace:Declutterer.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:viewModels="clr-namespace:Declutterer.ViewModels"
@@ -22,6 +23,10 @@
         -->
         <viewModels:ScanOptionsWindowViewModel />
     </Design.DataContext>
+
+    <Window.Resources>
+        <converters:PathMiddleEllipsisConverter x:Key="PathMiddleEllipsisConverter" />
+    </Window.Resources>
     <DockPanel>
         <StackPanel
             DockPanel.Dock="Bottom"
@@ -52,7 +57,7 @@
 
                 <!--  Locations  -->
                 <HeaderedContentControl Classes="indented" Header="Locations">
-                    <StackPanel Spacing="6">
+                    <StackPanel Spacing="8">
                         <CheckBox Content="Desktop" />
                         <CheckBox Content="Downloads" />
                         <CheckBox Content="Documents" />
@@ -65,6 +70,47 @@
                                 Text="Custom folders supported"
                                 VerticalAlignment="Center" />
                         </StackPanel>
+
+                        <!--  Added Directories List  -->
+                        <ItemsControl ItemsSource="{Binding ScanOptions.DirectoriesToScan}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border
+                                        Background="{DynamicResource ThemeBackgroundBrush}"
+                                        BorderBrush="{DynamicResource ThemeBorderMidBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="8,6">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock
+                                                FontSize="12"
+                                                Grid.Column="0"
+                                                Text="{Binding Converter={StaticResource PathMiddleEllipsisConverter}, ConverterParameter=50}"
+                                                VerticalAlignment="Center" />
+                                            <Button
+                                                Background="Azure"
+                                                BorderBrush="#FF999999"
+                                                BorderThickness="1"
+                                                Command="{Binding $parent[ItemsControl].DataContext.RemoveDirectoryCommand}"
+                                                CommandParameter="{Binding}"
+                                                Content="✕"
+                                                CornerRadius="4"
+                                                FontSize="18"
+                                                Foreground="Black"
+                                                Grid.Column="1"
+                                                HorizontalAlignment="Center"
+                                                HorizontalContentAlignment="Center"
+                                                Margin="0"
+                                                MinHeight="28"
+                                                MinWidth="28"
+                                                Padding="0"
+                                                VerticalAlignment="Center"
+                                                VerticalContentAlignment="Center" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </HeaderedContentControl>
 
