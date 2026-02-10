@@ -210,6 +210,55 @@
                 Source="{Binding Roots}"
                 x:Name="TreeDataGrid" />
 
+            <!--  No Children Found Message  -->
+            <StackPanel
+                HorizontalAlignment="Center"
+                IsVisible="{Binding NoChildrenFound}"
+                Orientation="Vertical"
+                Spacing="16"
+                VerticalAlignment="Center">
+
+                <!--  Icon  -->
+                <Path
+                    Data="{StaticResource folder_regular}"
+                    Fill="#FFA500"
+                    Stretch="Uniform"
+                    VerticalAlignment="Center"
+                    Width="64" />
+
+                <!--  Main Heading  -->
+                <TextBlock
+                    FontSize="24"
+                    FontWeight="SemiBold"
+                    Foreground="#333333"
+                    HorizontalAlignment="Center"
+                    Text="No matches found" />
+
+                <!--  Subtitle  -->
+                <TextBlock
+                    FontSize="13"
+                    Foreground="#666666"
+                    HorizontalAlignment="Center"
+                    Text="No files or folders matched your scan criteria."
+                    TextAlignment="Center" />
+
+                <TextBlock
+                    FontSize="13"
+                    Foreground="#666666"
+                    HorizontalAlignment="Center"
+                    Text="Try adjusting your filters and scanning again."
+                    TextAlignment="Center" />
+
+                <!--  Action Button  -->
+                <Button
+                    Background="CornflowerBlue"
+                    Command="{Binding ShowScanOptionsWindowCommand}"
+                    Content="Try Different Scan Settings"
+                    FontSize="14"
+                    HorizontalAlignment="Center"
+                    Padding="20,10,20,10" />
+            </StackPanel>
+
             <!--  Empty State - Hero Action  -->
             <StackPanel
                 HorizontalAlignment="Center"
@@ -238,7 +287,7 @@
                     FontSize="14"
                     Foreground="#666666"
                     HorizontalAlignment="Center"
-                    Text="Select directories to scan and find large files and folders"
+                    Text="Select directories to scan and find unused files and folders"
                     TextAlignment="Center" />
 
                 <!--  Hero Action Button  -->
@@ -268,11 +317,11 @@
                     <TextBlock
                         FontSize="11"
                         Foreground="#888888"
-                        Text="• Filter by file size, type, and age" />
+                        Text="• Filter by size, type, and age" />
                     <TextBlock
                         FontSize="11"
                         Foreground="#888888"
-                        Text="• Review and safely delete unwanted files" />
+                        Text="• Review and safely delete unwanted entries" />
                 </StackPanel>
             </StackPanel>
 

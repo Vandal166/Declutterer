@@ -12,6 +12,10 @@ public sealed partial class ScanOptionsWindowViewModel : ViewModelBase
 {
     [ObservableProperty]
     private ScanOptions scanOptions = new();
+    
+    [ObservableProperty]
+    private string? directorySelectionError;
+    
     private TopLevel? _topLevel;
     public event Action<ScanOptions>? RequestClose;
     public void SetTopLevel(TopLevel topLevel) => _topLevel = topLevel;
@@ -33,12 +37,24 @@ public sealed partial class ScanOptionsWindowViewModel : ViewModelBase
         {
             ScanOptions.DirectoriesToScan.Add(folder.Path.LocalPath);
         }
+        
+        // Clear error message if directories were added
+        if (ScanOptions.DirectoriesToScan.Count > 0)
+        {
+            DirectorySelectionError = null;
+        }
     }
     
     [RelayCommand]
     private void OnScan() // trigger Scan
     {
-        // TODO validate?
+        // Validate that at least one directory is selected
+        if (ScanOptions.DirectoriesToScan.Count == 0)
+        {
+            DirectorySelectionError = "Please select at least one directory to scan";
+            return;
+        }
+        
         // Calculate DateTime values before returning
         if (ScanOptions.AgeFilter.UseModifiedDate && ScanOptions.AgeFilter.MonthsModifiedValue > 0)
         {

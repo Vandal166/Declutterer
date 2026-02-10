@@ -44,7 +44,7 @@
                 <TextBlock
                     FontSize="12"
                     Foreground="#555555"
-                    Text="{Binding ItemsToDelete.Count, StringFormat='This will delete {0} item(s)'}" />
+                    Text="{Binding ItemsToDelete.Count, StringFormat='This will delete {0} item(s) alongside their contents.'}" />
             </StackPanel>
         </Border>
 

@@ -2,12 +2,12 @@
 using System;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 
 namespace Declutterer.Converters;
 
 public class PathMiddleEllipsisConverter : IValueConverter
 {
+    // Converts a path string to a shortened version with an ellipsis in the middle if it exceeds a certain length.
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo? culture)
     {
         if (value is not string path || string.IsNullOrEmpty(path))
@@ -28,7 +28,7 @@ public class PathMiddleEllipsisConverter : IValueConverter
         if (string.IsNullOrEmpty(lastSegment))
         {
             // Handle cases like "C:\" or "C:\Users\" where GetFileName might return empty
-            lastSegment = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Last();
+            lastSegment = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[^1]; // get last non-empty segment
         }
 
         // If just the last segment is already longer than maxLength, return it anyway

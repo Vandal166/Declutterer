@@ -5,6 +5,13 @@ namespace Declutterer.Services;
 
 public sealed class ScanFilterService
 {
+    private readonly ScanFilterBuilder _filterBuilder;
+
+    public ScanFilterService(ScanFilterBuilder filterBuilder)
+    {
+        _filterBuilder = filterBuilder;
+    }
+
     /// <summary>
     /// Creates a filter function based on the provided scan options.
     /// </summary>
@@ -15,7 +22,7 @@ public sealed class ScanFilterService
         if(options is null)
             return null; // No filter if options are null
         
-        var builder = new ScanFilterBuilder();
+        var builder = _filterBuilder;
         
         if (options.AgeFilter is { UseModifiedDate: true, ModifiedBefore: not null })
         {

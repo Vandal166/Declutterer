@@ -26,6 +26,8 @@ public partial class MainWindow : Window
             viewModel.SetTopLevel(this);
         }
     }
+    
+    //TODO always display the ifno panel at the bottom with details of the selected node(s)
 
     protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -34,7 +36,7 @@ public partial class MainWindow : Window
    
    //TODO 2: alt + left click on Expander to expand ALL children recursively (can be done by checking if Alt key is pressed in RowExpanding event and then setting IsExpanded to true for all descendants)
    
-   //TODO 3: Add an 'Clear' button to clear the whole TreeDataGrid
+   //TODO 3: add a context menu to the rows with options like "Open in Explorer", "Copy Path", "Delete",
         if (DataContext is MainWindowViewModel viewModel)
         {
             // finding TreeDataGrid control and setting up the hierarchical data source for it

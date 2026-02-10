@@ -23,9 +23,13 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool _isAnyNodeLoading = false; // used for showing loading indicator on the UI
     
     [ObservableProperty]
+    private bool _noChildrenFound = false; // flag to indicate that no children were found for the selected directories based on the scan options
+    
+    [ObservableProperty]
     private string _selectedNodesSizeText = string.Empty; // a user-friendly string representation of the total size of the currently selected nodes
     
     private readonly DirectoryScanService _directoryScanService;
+    private readonly SmartSelectionService _smartSelectionService;
     private readonly IIconLoader _iconLoaderService;
     
     private ScanOptions? _currentScanOptions;
@@ -37,11 +41,12 @@ public partial class MainWindowViewModel : ViewModelBase
     
     public ObservableHashSet<TreeNode> SelectedNodes { get; } = new(); // the currently selected nodes in the TreeDataGrid
     
-    public MainWindowViewModel(DirectoryScanService directoryScanService, IIconLoader iconLoaderService)
+    public MainWindowViewModel(DirectoryScanService directoryScanService, IIconLoader iconLoaderService, SmartSelectionService smartSelectionService)
     {
         _directoryScanService = directoryScanService;
         _iconLoaderService = iconLoaderService;
-        
+        _smartSelectionService = smartSelectionService;
+
         // Wire up selection change tracking
         SelectedNodes.CollectionChanged += (s, e) =>
         {
@@ -109,6 +114,7 @@ public partial class MainWindowViewModel : ViewModelBase
         Roots.Clear();
         SelectedNodes.Clear();
         _currentScanOptions = null;
+        NoChildrenFound = false;
     }
 
     [RelayCommand]
@@ -124,15 +130,13 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void SmartSelect()
     {
-        if (_currentScanOptions == null)
+        if (_currentScanOptions is null)
             return;
-            
-        var sss = new SmartSelectionService(new SmartSelectionScorer());
         
         DeselectAll();
         foreach (var rootChild in Roots)
         {
-            var toSelect = sss.Select(rootChild, _currentScanOptions, new ScorerOptions());
+            var toSelect = _smartSelectionService.Select(rootChild, _currentScanOptions, new ScorerOptions());
             foreach (var selectedNode in toSelect)
             {
                 selectedNode.IsSelected = true; // Update the node's selection state for UI binding
@@ -159,6 +163,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 _currentScanOptions = result;
 
                 Roots.Clear();
+                NoChildrenFound = false;
 
                 var validRoots = new List<TreeNode>();
                 foreach (var directoryPath in _currentScanOptions.DirectoriesToScan.Where(Directory.Exists))
@@ -181,6 +186,16 @@ public partial class MainWindowViewModel : ViewModelBase
                     // Load children for all roots in parallel - returns a dictionary mapping each root to its children
                     var childrenByRoot = await _directoryScanService.LoadChildrenForMultipleRootsAsync(validRoots, _currentScanOptions);
 
+                    if (childrenByRoot.Values.All(children => children.Count == 0))
+                    {
+                        // No children were found for the selected directories based on the scan options
+                        NoChildrenFound = true;
+                        return;
+                    }
+                    
+                    // Reset the flag since we found children
+                    NoChildrenFound = false;
+                    
                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         foreach (var root in validRoots)

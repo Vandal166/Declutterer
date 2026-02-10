@@ -111,6 +111,13 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+
+                        <!--  Error Message  -->
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="Red"
+                            IsVisible="{Binding DirectorySelectionError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                            Text="{Binding DirectorySelectionError}" />
                     </StackPanel>
                 </HeaderedContentControl>
 
