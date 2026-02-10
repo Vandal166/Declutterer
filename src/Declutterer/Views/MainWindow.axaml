@@ -344,7 +344,7 @@
             Grid.Column="0"
             Grid.ColumnSpan="2"
             Grid.Row="1"
-            IsVisible="{Binding SelectedNodes.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
+            IsVisible="{Binding Roots.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
             Padding="15,12"
             VerticalAlignment="Bottom">
             <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" HorizontalAlignment="Stretch">

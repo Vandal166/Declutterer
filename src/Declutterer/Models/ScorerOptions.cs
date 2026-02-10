@@ -6,5 +6,5 @@ public class ScorerOptions
     public double WeightAge { get; set; } = 0.5;
     public double WeightSize { get; set; } = 0.5;
     
-    public double TopPercentage { get; set; } = 0.1; // select top n% of nodes by score
+    public double TopPercentage { get; set; } = 0.4; // select top n% of nodes by score
 }
