@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,7 +11,6 @@ using Declutterer.Common;
 using Declutterer.Models;
 using Declutterer.Services;
 using Declutterer.Views;
-using Serilog;
 
 namespace Declutterer.ViewModels;
 
@@ -177,50 +175,58 @@ public partial class MainWindowViewModel : ViewModelBase
                     catch (UnauthorizedAccessException){/*skip*/}
                 }
 
-                IsAnyNodeLoading = true;
-                var sw = new Stopwatch();
-                sw.Start();
-                
-                try
-                {
-                    // Load children for all roots in parallel - returns a dictionary mapping each root to its children
-                    var childrenByRoot = await _directoryScanService.LoadChildrenForMultipleRootsAsync(validRoots, _currentScanOptions);
-
-                    if (childrenByRoot.Values.All(children => children.Count == 0))
-                    {
-                        // No children were found for the selected directories based on the scan options
-                        NoChildrenFound = true;
-                        return;
-                    }
-                    
-                    // Reset the flag since we found children
-                    NoChildrenFound = false;
-                    
-                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        foreach (var root in validRoots)
-                        {
-                            if (childrenByRoot.TryGetValue(root, out var children)) // if we got children for this root then add them to the root's Children collection
-                            {
-                                foreach (var child in children)
-                                {
-                                    root.Children.Add(child);
-                                }
-                                root.IsExpanded = true;
-                            }
-                        }
-                    });
-                }
-                finally
-                {
-                    sw.Stop();
-                    IsAnyNodeLoading = false;
-                    Log.Information("Initial scan completed in {ElapsedMilliseconds} ms", sw.ElapsedMilliseconds);
-                }
+                await LoadChildrenParallelAsync(validRoots);
             }
         }
     }
-    
+
+    public async Task LoadChildrenParallelAsync(List<TreeNode> validRoots)
+    {
+        IsAnyNodeLoading = true;
+                
+        try
+        {
+            // Load children for all roots in parallel - returns a dictionary mapping each root to its children
+            var childrenByRoot = await _directoryScanService.LoadChildrenForMultipleRootsAsync(validRoots, _currentScanOptions);
+
+            if (childrenByRoot.Values.All(children => children.Count == 0))
+            {
+                // No children were found for the selected directories based on the scan options
+                NoChildrenFound = true;
+                return;
+            }
+                    
+            // Reset the flag since we found children
+            NoChildrenFound = false;
+            
+            // Batch UI updates to reduce dispatcher overhead - add children in chunks
+            const int batchSize = 100;
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                foreach (var root in validRoots)
+                {
+                    if (childrenByRoot.TryGetValue(root, out var children)) // if we got children for this root then add them to the root's Children collection
+                    {
+                        // Add children in batches to avoid overwhelming the UI thread
+                        for (int i = 0; i < children.Count; i += batchSize)
+                        {
+                            var batch = children.Skip(i).Take(batchSize);
+                            foreach (var child in batch)
+                            {
+                                root.Children.Add(child);
+                            }
+                        }
+                        root.IsExpanded = true;
+                    }
+                }
+            });
+        }
+        finally
+        {
+            IsAnyNodeLoading = false;
+        }
+    }
+
     [RelayCommand]
     private async Task ShowCleanupWindowAsync()
     {

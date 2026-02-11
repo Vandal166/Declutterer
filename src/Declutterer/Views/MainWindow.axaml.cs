@@ -5,16 +5,22 @@ using Avalonia.Controls.Templates;
 using Declutterer.ViewModels;
 using Declutterer.Models;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Tasks;
+using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Serilog;
 
 namespace Declutterer.Views;
 
 public partial class MainWindow : Window
 {
     private bool _isUpdatingSelection = false; // Guard against re-entrancy during recursive selection updates
+    private bool _isExpandingAll = false; // Flag to prevent multiple simultaneous expand/collapse operations
+    private double _lastPointerPressedTime = 0; // For detecting double-clicks on expanders
     
     public MainWindow()
     {
@@ -26,16 +32,10 @@ public partial class MainWindow : Window
             viewModel.SetTopLevel(this);
         }
     }
-    
-    //TODO always display the ifno panel at the bottom with details of the selected node(s)
 
     protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
     {
         base.OnLoaded(e);
-   //TODO overload the sorting for the columns? Since sometiems they sort wrong
-   
-   //TODO 2: alt + left click on Expander to expand ALL children recursively (can be done by checking if Alt key is pressed in RowExpanding event and then setting IsExpanded to true for all descendants)
-   
    //TODO 3: add a context menu to the rows with options like "Open in Explorer", "Copy Path", "Delete",
         if (DataContext is MainWindowViewModel viewModel)
         {
@@ -65,7 +65,8 @@ public partial class MainWindow : Window
                                 var checkBox = new CheckBox
                                 {
                                     IsChecked = node.IsSelected,
-                                    HorizontalAlignment = HorizontalAlignment.Center
+                                    HorizontalAlignment = HorizontalAlignment.Center,
+                                    IsEnabled = !IsAnyAncestorSelected(node) // disable checkbox if the parent is selected (except for root-most nodes(the ones with depth == 0))
                                 };
                                 
                                 // Sync from CheckBox to TreeNode
@@ -86,13 +87,31 @@ public partial class MainWindow : Window
                                 {
                                     if (e.PropertyName == nameof(TreeNode.IsSelected))
                                     {
-                                        System.Diagnostics.Debug.WriteLine($"[CheckBox sync] Node '{node.Name}' IsSelected changed to {node.IsSelected}");
                                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                                         {
                                             checkBox.IsChecked = node.IsSelected;
+                                            checkBox.IsEnabled = !IsAnyAncestorSelected(node);
                                             checkBox.InvalidateVisual();
-                                            System.Diagnostics.Debug.WriteLine($"[CheckBox sync] Set checkBox.IsChecked to {checkBox.IsChecked} for '{node.Name}'");
+                                            
                                         }, Avalonia.Threading.DispatcherPriority.Render);
+                                    }
+                                    // this makes sure that if all children node's IsSelected is true, then we update the enabled state of the children the next time the parent IsSelected is true,
+                                    // example: we select all children then select the parent -> set IsEnable to false for children
+                                    var current = node.Parent;
+                                    while (current != null)
+                                    {
+                                        current.PropertyChanged += (_, e) =>
+                                        {
+                                            if (e.PropertyName == nameof(TreeNode.IsSelected))
+                                            {
+                                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                                {
+                                                    checkBox.IsEnabled = !IsAnyAncestorSelected(node);
+                                                    checkBox.InvalidateVisual();
+                                                }, Avalonia.Threading.DispatcherPriority.Render);
+                                            }
+                                        };
+                                        current = current.Parent;
                                     }
                                 };
                                 
@@ -108,7 +127,10 @@ public partial class MainWindow : Window
                             {
                                 TextTrimming = TextTrimming.PrefixCharacterEllipsis,
                                 CanUserResizeColumn = true,
-                                MaxWidth = new GridLength(400)
+                                MaxWidth = new GridLength(400),
+                                CanUserSortColumn = true,
+                                CompareAscending = (a, b) => string.Compare(a?.Name, b?.Name, StringComparison.OrdinalIgnoreCase),
+                                CompareDescending = (a, b) => string.Compare(b?.Name, a?.Name, StringComparison.OrdinalIgnoreCase),
                             }),
                             x => x.Children,
                             x => x.HasChildren,
@@ -117,21 +139,36 @@ public partial class MainWindow : Window
                             options: new TextColumnOptions<TreeNode>
                             {
                                 TextAlignment = TextAlignment.Right,
+                                CanUserResizeColumn = true,
+                                CanUserSortColumn = true,
+                                CompareAscending = (a, b) => a?.Size.CompareTo(b?.Size ?? 0) ?? 0,
+                                CompareDescending = (a, b) => b?.Size.CompareTo(a?.Size ?? 0) ?? 0,
                             }),
 
-                        new TextColumn<TreeNode, DateTime?>("Last Modified", x => x.LastModified),
+                        new TextColumn<TreeNode, DateTime?>("Last Modified", x => x.LastModified,
+                            options: new TextColumnOptions<TreeNode>
+                            {
+                                TextAlignment = TextAlignment.Right,
+                                CanUserResizeColumn = true,
+                                CanUserSortColumn = true,
+                                CompareAscending = (a, b) => Nullable.Compare(a?.LastModified, b?.LastModified),
+                                CompareDescending = (a, b) => Nullable.Compare(b?.LastModified, a?.LastModified),
+                            }),
                         new TextColumn<TreeNode, string>("Path", x => x.FullPath, options: new TextColumnOptions<TreeNode>
                         {
                             TextTrimming = TextTrimming.PathSegmentEllipsis,
-                            // MaxWidth = new GridLength((GetTopLevel(this)?.Bounds.Width ?? 900) / 3),
-                            // CanUserResizeColumn = true,
-                            // CanUserSortColumn = true
+                            CanUserSortColumn = false,
+                            MaxWidth = new GridLength((GetTopLevel(this)?.Bounds.Width ?? 900) / 3), // this will make the path column take up at most 1/3 of the window width
                         }),
                     }
                 };
+                
                 // sub to row expanding event to trigger lazy loading
                 source.RowExpanding += async (sender, args) =>
                 {
+                    if(_isExpandingAll) 
+                        return; // Skip if we're already in the middle of an expand/collapse all operation triggered by Alt+Click
+                    
                     if (args.Row.Model is { IsDirectory: true, HasChildren: true} node)
                     {
                         // if children not loaded yet then load them and skip loading children for root nodes since we already load them with children in the initial scan
@@ -163,6 +200,9 @@ public partial class MainWindow : Window
                 
                 source.RowCollapsing += (sender, args) =>
                 {
+                    if(_isExpandingAll)
+                        return;
+                    
                     if (args.Row.Model is TreeNode node) // setting IsExpanded to false on collapse for the node
                     {
                         node.IsExpanded = false;
@@ -172,41 +212,61 @@ public partial class MainWindow : Window
                 // Handle pointer events to detect Alt+Click on expander
                 treeDataGrid.PointerPressed += async (sender, args) =>
                 {
-                    // Check if Alt key is pressed and it's a left click
+                    if(_isExpandingAll)
+                        return;
+                    
+                    if(args.GetCurrentPoint(treeDataGrid).Properties.IsLeftButtonPressed)
+                    {
+                        double currentTime = args.Timestamp;
+                        if (currentTime - _lastPointerPressedTime < 300) // 300ms threshold for double-click
+                        {
+                            //TODO let the vm handle and open in explroer on double click
+                            return;
+                        }
+                        _lastPointerPressedTime = currentTime;
+                    }
+                };
+                
+                treeDataGrid.AddHandler(InputElement.PointerPressedEvent, (sender, args) =>
+                {
                     if ((args.KeyModifiers & KeyModifiers.Alt) == KeyModifiers.Alt && args.GetCurrentPoint(treeDataGrid).Properties.IsLeftButtonPressed)
                     {
-                        // Try to find if the click was on an expander by checking the visual tree
                         var point = args.GetCurrentPoint(treeDataGrid);
                         var visual = treeDataGrid.InputHitTest(point.Position) as Control;
-                        
-                        // Walk up the visual tree to find the row being clicked
+
                         while (visual != null)
                         {
-                            if (visual is DataGridRow row && row.DataContext is TreeNode node)
+                            if (visual.Name == "PART_ExpanderButton" || visual.GetType().Name.Contains("ToggleButton"))
                             {
-                                // Check if node has children (has an expander)
-                                if (node.HasChildren)
+                                var parent = visual.Parent as Control;
+                                while (parent != null)
                                 {
-                                    // Toggle the expansion state recursively
-                                    bool shouldExpand = !node.IsExpanded;
-                                    await ToggleAllDescendantsAsync(node, shouldExpand, viewModel);
-                                    args.Handled = true;
+                                    if (parent is TreeDataGridRow row && row.DataContext is TreeNode node)
+                                    {
+                                        if (node.HasChildren)
+                                        {
+                                            bool willExpand = !node.IsExpanded;
+                                            
+                                            // Fire and forget - expand/collapse all descendants
+                                            _ = HandleAltClickExpandAsync(node, viewModel, willExpand);
+                                        }
+                                        break;
+                                    }
+                                    parent = parent.Parent as Control;
                                 }
                                 break;
                             }
                             visual = visual.Parent as Control;
                         }
                     }
-                };
+                }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+
                 
                 treeDataGrid.Source = source; // assigning the source to the TreeDataGrid so that it can display the data
             }
         }
     }
     
-    /// <summary>
-    /// Subscribes to PropertyChanged events on a TreeNode to detect IsSelected changes.
-    /// </summary>
     private void SubscribeToNodeSelectionChanges(TreeNode node)
     {
         node.PropertyChanged += (sender, args) =>
@@ -220,15 +280,12 @@ public partial class MainWindow : Window
     
     /// <summary>
     /// Called whenever a TreeNode's IsSelected property changes.
-    /// Modify this method to add your custom logic.
     /// </summary>
     private void OnTreeNodeSelectionChanged(TreeNode node)
     {
         // Prevent re-entrancy when we're programmatically updating children
         if (_isUpdatingSelection)
             return;
-            
-        System.Diagnostics.Debug.WriteLine($"Node '{node.Name}' selection changed to: {node.IsSelected}");
 
         // Only propagate to currently-loaded children
         // Newly-loaded children will inherit the IsSelected state from their parent via DirectoryScanService
@@ -275,41 +332,80 @@ public partial class MainWindow : Window
         }
     }
     
+    private async Task HandleAltClickExpandAsync(TreeNode node, MainWindowViewModel viewModel, bool shouldExpand)
+    {
+        var sw = new Stopwatch();
+        sw.Start();
+        try
+        {
+            _isExpandingAll = true;
+            // Pass isRoot=true so we skip setting IsExpanded on the clicked root node (the TreeDataGrid handles the root node's toggle via normal click processing)
+            await ToggleAllDescendantsAsync(node, shouldExpand, viewModel, isRoot: true);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error during Alt+Click expand/collapse for node '{NodeName}'", node.Name);
+        }
+        finally
+        {
+            _isExpandingAll = false;
+            sw.Stop();
+            Log.Information("Completed Alt+Click expand/collapse for node '{NodeName}' in {ElapsedMilliseconds} ms", node.Name, sw.ElapsedMilliseconds);
+        }
+    }
+
     /// <summary>
     /// Recursively toggles the expansion state of a node and all its descendants.
+    /// Uses parallel processing with task batching to efficiently handle large directory trees.
     /// </summary>
-    private async Task ToggleAllDescendantsAsync(TreeNode node, bool shouldExpand, MainWindowViewModel viewModel)
+    /// <param name="node">The node to process</param>
+    /// <param name="shouldExpand">Whether to expand or collapse</param>
+    /// <param name="viewModel">The view model for loading children</param>
+    /// <param name="isRoot">True if this is the root node of the Alt+Click (its toggle is handled by TreeDataGrid)</param>
+    private async Task ToggleAllDescendantsAsync(TreeNode node, bool shouldExpand, MainWindowViewModel viewModel, bool isRoot = false)
     {
         // Load children if not already loaded
-        if (node.Children.Count == 0 && node.IsDirectory && node.HasChildren)
+        if (node.Children.Count == 0 && node is { IsDirectory: true, HasChildren: true })
         {
-            await viewModel.LoadChildrenForNodeAsync(node);
+            await viewModel.LoadChildrenParallelAsync(new List<TreeNode>() { node});
         }
         
-        // Set expansion state for current node
-        node.IsExpanded = shouldExpand;
+        foreach (var child in node.Children)
+        {
+            child.IsExpanded = shouldExpand;
+        }
         
-        if (shouldExpand)
+        // Process all child directories recursively in parallel
+        var directoryChildren = node.Children
+            .Where(child => child is { IsDirectory: true, HasChildren: true })
+            .ToList();
+        
+        if (directoryChildren.Count > 0)
         {
-            // Recursively expand all descendants
-            foreach (var child in node.Children)
-            {
-                if (child.IsDirectory && child.HasChildren)
-                {
-                    await ToggleAllDescendantsAsync(child, true, viewModel);
-                }
-            }
+            // Process all directory children concurrently
+            var tasks = directoryChildren
+                .Select(child => ToggleAllDescendantsAsync(child, shouldExpand, viewModel, isRoot: false))
+                .ToList();
+            
+            await Task.WhenAll(tasks);
         }
-        else
+        
+        // Only set expansion state for this node if it's NOT the root of the Alt+Click
+        // The TreeDataGrid handles the root node's toggle via normal click processing
+        if (!isRoot)
         {
-            // Recursively collapse all descendants
-            foreach (var child in node.Children)
-            {
-                if (child.IsDirectory && child.HasChildren)
-                {
-                    await ToggleAllDescendantsAsync(child, false, viewModel);
-                }
-            }
+            node.IsExpanded = shouldExpand;
         }
+    }
+    private static bool IsAnyAncestorSelected(TreeNode node)
+    {
+        var current = node.Parent;
+        while (current != null)
+        {
+            if (current.IsSelected)
+                return true;
+            current = current.Parent;
+        }
+        return false;
     }
 }

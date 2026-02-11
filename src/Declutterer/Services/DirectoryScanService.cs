@@ -1,11 +1,14 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
+using System.Linq;
 using System.Threading.Tasks;
 using Declutterer.Models;
 using Microsoft.Extensions.Logging;
 using Serilog;
+// ReSharper disable SuggestVarOrType_Elsewhere
+// ReSharper disable SuggestVarOrType_SimpleTypes
 
 namespace Declutterer.Services;
 
@@ -13,14 +16,16 @@ public sealed class DirectoryScanService
 {
     private readonly ScanFilterService _scanFilterService;
     private readonly ILogger<DirectoryScanService> _logger;
-    private readonly Lock _scanLock = new();
+    
+    // caching sizes to avoid redundant recursive calculations, <fullPath, size>
+    private static readonly ConcurrentDictionary<string, long> _sizeCache = new();
     
     public DirectoryScanService(ScanFilterService scanFilterService, ILogger<DirectoryScanService> logger)
     {
         _scanFilterService = scanFilterService;
         _logger = logger;
     }
-
+    
     /// <summary>
     /// Creates the root TreeNode for the specified directory path.
     /// </summary>
@@ -172,7 +177,7 @@ public sealed class DirectoryScanService
         try
         {
             var directories = dirInfo.GetDirectories();
-            var childNodes = new List<TreeNode>();
+            var childNodes = new ConcurrentBag<TreeNode>();
             
             Parallel.ForEach(directories, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, dir =>
             {
@@ -196,10 +201,7 @@ public sealed class DirectoryScanService
                     if (filter != null && !filter(childNode))
                         return;
 
-                    using (_scanLock.EnterScope())
-                    {
-                        childNodes.Add(childNode);
-                    }
+                    childNodes.Add(childNode);
                 }
                 catch (Exception ex)
                 {
@@ -224,7 +226,9 @@ public sealed class DirectoryScanService
     /// </summary>
     public async Task<Dictionary<TreeNode, List<TreeNode>>> LoadChildrenForMultipleRootsAsync(IEnumerable<TreeNode> rootNodes, ScanOptions? scanOptions)
     {
-        var childrenByRoot = new Dictionary<TreeNode, List<TreeNode>>();
+        ClearSizeCache();
+        
+        var childrenByRoot = new ConcurrentDictionary<TreeNode, List<TreeNode>>();
         
         return await Task.Run(() =>
         {
@@ -240,50 +244,55 @@ public sealed class DirectoryScanService
                     LoadSubdirectoriesParallel(rootNode, dirInfo, filter, children);
                     LoadFiles(rootNode, dirInfo, filter, children);
                     
-                    using (_scanLock.EnterScope())
-                    {
-                        childrenByRoot[rootNode] = children;
-                    }
+                    childrenByRoot.TryAdd(rootNode, children);
                 }
                 catch (UnauthorizedAccessException)
                 {
-                    // Skip directories we don't have access to
-                    using (_scanLock.EnterScope())
-                    {
-                        childrenByRoot[rootNode] = new List<TreeNode>(); // set empty list for roots we cant access
-                    }
+                    childrenByRoot.TryAdd(rootNode, new List<TreeNode>());
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error loading children for root: {NodePath}", rootNode.FullPath);
-                    using (_scanLock.EnterScope())
-                    {
-                        childrenByRoot[rootNode] = new List<TreeNode>();
-                    }
+                    childrenByRoot.TryAdd(rootNode, new List<TreeNode>());
                 }
             });
             
-            return childrenByRoot;
+            return childrenByRoot.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
         });
     }
     
     
-    // Recursively calculates the size of a directory and returns it in bytes
+    /// <summary>
+    /// Recursively calculates the size of a directory with caching to avoid redundant calculations.
+    /// </summary>
     private static long CalculateDirectorySize(DirectoryInfo dir) 
-    {    
-        long size = 0;    
-        // Add file sizes.
-        FileInfo[] fis = dir.GetFiles();
-        foreach (FileInfo fi in fis) 
-        {      
-            size += fi.Length;    
-        }
-        // Add subdirectory sizes.
-        DirectoryInfo[] dis = dir.GetDirectories();
-        foreach (DirectoryInfo di in dis) 
+    {
+        if (_sizeCache.TryGetValue(dir.FullName, out var cachedSize))
+            return cachedSize;
+        
+        long size = 0;
+        
+        try
         {
-            size += CalculateDirectorySize(di);   
+            // Add file sizes
+            FileInfo[] fis = dir.GetFiles();
+            foreach (FileInfo fi in fis) 
+            {      
+                size += fi.Length;    
+            }
+            
+            // Add subdirectory sizes
+            DirectoryInfo[] dis = dir.GetDirectories();
+            foreach (DirectoryInfo di in dis) 
+            {
+                size += CalculateDirectorySize(di);   
+            }
         }
-        return size;  
+        catch (UnauthorizedAccessException) {/* ret 0; when access denied*/}
+        
+        _sizeCache.TryAdd(dir.FullName, size);
+        return size;
     }
+    
+    private static void ClearSizeCache() => _sizeCache.Clear();
 }

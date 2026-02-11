@@ -24,9 +24,6 @@
         <viewModels:ScanOptionsWindowViewModel />
     </Design.DataContext>
 
-    <Window.Resources>
-        <converters:PathMiddleEllipsisConverter x:Key="PathMiddleEllipsisConverter" />
-    </Window.Resources>
     <DockPanel>
         <StackPanel
             DockPanel.Dock="Bottom"

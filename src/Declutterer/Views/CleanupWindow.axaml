@@ -1,5 +1,5 @@
 ﻿<Window
-    Height="800"
+    Height="850"
     Title="Cleanup Review"
     Width="900"
     WindowStartupLocation="CenterScreen"
@@ -107,7 +107,7 @@
                                                     <TextBlock
                                                         FontSize="11"
                                                         Foreground="Gray"
-                                                        Text="{Binding FullPath}" />
+                                                        Text="{Binding FullPath, Converter={StaticResource PathMiddleEllipsisConverter}, ConverterParameter=140}" />
                                                     <TextBlock
                                                         FontSize="10"
                                                         Foreground="Gray"
@@ -128,9 +128,9 @@
         <Border
             Background="#FFF9E6"
             BorderBrush="#FFD700"
-            BorderThickness="0,1,0,0"
+            BorderThickness="1"
             Grid.Row="3"
-            Margin="10,5,0,10"
+            Margin="10,5,10,10"
             Padding="20,10">
             <StackPanel Orientation="Vertical" Spacing="8">
                 <TextBlock
@@ -143,11 +143,12 @@
                 <Border
                     Background="White"
                     BorderBrush="#2D5A2D"
-                    BorderThickness="2"
+                    BorderThickness="1"
                     CornerRadius="4"
-                    Padding="10">
+                    Padding="5">
                     <RadioButton
-                        Content="📁 Send to Recycle Bin (safer)"
+                        Content="Send to Recycle Bin (safer)"
+                        FontWeight="Bold"
                         Foreground="#2D5A2D"
                         GroupName="DeleteMethod"
                         IsChecked="{Binding SendToRecycleBin}" />
@@ -157,16 +158,15 @@
                 <Border
                     Background="White"
                     BorderBrush="#DC143C"
-                    BorderThickness="3"
+                    BorderThickness="1"
                     CornerRadius="4"
-                    Padding="10">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <RadioButton
-                            Content="🔴 Permanent Delete (cannot be undone)"
-                            Foreground="#B22222"
-                            GroupName="DeleteMethod"
-                            IsChecked="{Binding !SendToRecycleBin}" />
-                    </StackPanel>
+                    Padding="5">
+                    <RadioButton
+                        Content="Permanent Delete (cannot be undone)"
+                        FontWeight="Bold"
+                        Foreground="#B22222"
+                        GroupName="DeleteMethod"
+                        IsChecked="{Binding !SendToRecycleBin}" />
                 </Border>
             </StackPanel>
         </Border>
