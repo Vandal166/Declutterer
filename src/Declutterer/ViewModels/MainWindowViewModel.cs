@@ -5,6 +5,13 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Controls.Models.TreeDataGrid;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.LogicalTree;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Declutterer.Common;
@@ -30,6 +37,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly SmartSelectionService _smartSelectionService;
     private readonly IIconLoader _iconLoaderService;
     
+    private bool _isUpdatingSelection = false; // Guard against re-entrancy during recursive selection updates
+
     private ScanOptions? _currentScanOptions;
     private TopLevel? _topLevel;
     
@@ -38,6 +47,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<TreeNode> Roots { get; } = new();
     
     public ObservableHashSet<TreeNode> SelectedNodes { get; } = new(); // the currently selected nodes in the TreeDataGrid
+    private readonly HashSet<TreeNode> _subscribedNodes = new();
     
     public MainWindowViewModel(DirectoryScanService directoryScanService, IIconLoader iconLoaderService, SmartSelectionService smartSelectionService)
     {
@@ -247,5 +257,260 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             await cleanupWindow.ShowDialog(window);
         }
+    }
+    public void SubscribeToNodeSelectionChanges(TreeNode node)
+    {
+        if (!_subscribedNodes.Add(node))
+            return; // preventing another subscription for the same node, example after collapsing/expanding which can trigger multiple PropertyChanged events for the same node
+        
+        node.PropertyChanged += (sender, args) =>
+        {
+            if (args.PropertyName == nameof(TreeNode.IsSelected))
+            {
+                OnTreeNodeSelectionChanged(node);
+            }
+        };
+    }
+    /// <summary>
+    /// Called whenever a TreeNode's IsSelected property changes.
+    /// </summary>
+    private void OnTreeNodeSelectionChanged(TreeNode node)
+    {
+        // Prevent re-entrancy when we're programmatically updating children
+        if (_isUpdatingSelection)
+            return;
+
+        // Update SelectedNodes collection
+        if (node.IsSelected)
+        {
+            SelectedNodes.Add(node);
+            
+            // removing all descendants from SelectedNodes since parent selection encompasses them
+            RemoveDescendantsFromSelectedNodes(node);
+            
+            // But still update children's IsSelected visual state
+            if (node.Children.Count > 0)
+            {
+                SetIsSelectedRecursively(node.Children, true);
+            }
+        }
+        else
+        {
+            // Remove the parent node
+            SelectedNodes.Remove(node);
+            
+            // When deselecting a parent, also deselect all children
+            if (node.Children.Count > 0)
+            {
+                SetIsSelectedRecursively(node.Children, false);
+            }
+        }
+        
+        // Update IsEnabled state for all children since parent's selection changed
+        UpdateChildrenEnabledState(node);
+    }
+
+    /// <summary>
+    /// Recursively removes all descendants of a node from the SelectedNodes collection.
+    /// Used when a parent is selected to prevent double-counting children.
+    /// </summary>
+    private void RemoveDescendantsFromSelectedNodes(TreeNode node)
+    {
+        foreach (var child in node.Children)
+        {
+            SelectedNodes.Remove(child);
+            if (child.Children.Count > 0)
+            {
+                RemoveDescendantsFromSelectedNodes(child);
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Recursively sets the IsSelected property on all nodes in the collection and their descendants.
+    /// </summary>
+    private void SetIsSelectedRecursively(ObservableCollection<TreeNode> nodes, bool isSelected)
+    {
+        _isUpdatingSelection = true;
+        try
+        {
+            SetIsSelectedRecursivelyInternal(nodes, isSelected);
+        }
+        finally
+        {
+            _isUpdatingSelection = false;
+        }
+    }
+    
+    private void SetIsSelectedRecursivelyInternal(ObservableCollection<TreeNode> nodes, bool isSelected)
+    {
+        foreach (var child in nodes)
+        {
+            
+            // Only update if the value is different to avoid unnecessary property change notifications
+            if (child.IsSelected != isSelected)
+            {
+                child.IsSelected = isSelected;
+                
+                // Only update the SelectedNodes collection when deselecting
+                // When selecting, we don't add children since parent selection should be enough
+                if (!isSelected)
+                {
+                    SelectedNodes.Remove(child);
+                }
+            }
+            
+            // Recursively update all already-loaded children
+            // Note: Newly loaded children will inherit the IsSelected state from their parent
+            // when they are loaded via LoadChildrenAsync in DirectoryScanService
+            if (child.Children.Count > 0)
+            {
+                SetIsSelectedRecursivelyInternal(child.Children, isSelected);
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void UpdateNodeSelection((TreeNode, bool) nodeAndSelection)
+    {
+        var (node, isSelected) = nodeAndSelection;
+        if (node.IsSelected == isSelected)
+            return; // No change, skip
+
+        node.IsSelected = isSelected;
+
+        if (isSelected)
+        {
+            SelectedNodes.Add(node);
+        }
+        else
+        {
+            SelectedNodes.Remove(node);
+        }
+    }
+    
+    public HierarchicalTreeDataGridSource<TreeNode> CreateTreeDataGridSource(MainWindowViewModel viewModel, double? viewWidth = null)
+    {
+        var source = new HierarchicalTreeDataGridSource<TreeNode>(viewModel.Roots)
+        {
+            Columns =
+            {
+                new TemplateColumn<TreeNode>("Select", 
+                    new FuncDataTemplate<TreeNode>((node, _) =>
+                    {
+                        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+                        if(node is null)
+                            return null;
+                        //TODO make parent distinct from child nodes visually
+                                
+                        // Don't create checkbox for root nodes (Depth == 0)
+                        if (node.Depth == 0)
+                        {
+                            node.IsExpanded = true; // auto expanded root node
+                            return new Control();
+                        }
+                                
+                        var checkBox = new CheckBox
+                        {
+                            IsChecked = node.IsSelected,
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                        };
+                        
+                        // Bind IsChecked to TreeNode.IsSelected
+                        checkBox.Bind(ToggleButton.IsCheckedProperty, new Avalonia.Data.Binding(nameof(TreeNode.IsSelected))
+                        {
+                            Source = node,
+                            Mode = Avalonia.Data.BindingMode.TwoWay
+                        });
+                        
+                        // Bind IsEnabled to TreeNode.IsEnabled
+                        checkBox.Bind(InputElement.IsEnabledProperty, new Avalonia.Data.Binding(nameof(TreeNode.IsEnabled))
+                        {
+                            Source = node,
+                            Mode = Avalonia.Data.BindingMode.OneWay
+                        });
+                        
+                        // Sync from CheckBox to TreeNode
+                        checkBox.IsCheckedChanged += (s, e) =>
+                        {
+                            viewModel.UpdateNodeSelection((node, checkBox.IsChecked.Value));
+                        };
+                                
+                        return checkBox;
+                    }, supportsRecycling: false), // Disable recycling to ensure each node has its own CheckBox
+                    options: new TemplateColumnOptions<TreeNode>
+                    {
+                        CanUserResizeColumn = false,
+                        CanUserSortColumn = false,
+                    }),
+                new HierarchicalExpanderColumn<TreeNode>(
+                    new TextColumn<TreeNode, string>("Name", x => x.Name, options: new TextColumnOptions<TreeNode>
+                    {
+                        TextTrimming = TextTrimming.PrefixCharacterEllipsis,
+                        CanUserResizeColumn = true,
+                        MaxWidth = new GridLength(400),
+                        CanUserSortColumn = true,
+                        CompareAscending = (a, b) => string.Compare(a?.Name, b?.Name, StringComparison.OrdinalIgnoreCase),
+                        CompareDescending = (a, b) => string.Compare(b?.Name, a?.Name, StringComparison.OrdinalIgnoreCase),
+                    }),
+                    x => x.Children,
+                    x => x.HasChildren,
+                    x => x.IsExpanded),
+                new TextColumn<TreeNode, string>("Size", x => x.SizeFormatted,
+                    options: new TextColumnOptions<TreeNode>
+                    {
+                        TextAlignment = TextAlignment.Right,
+                        CanUserResizeColumn = true,
+                        CanUserSortColumn = true,
+                        CompareAscending = (a, b) => a?.Size.CompareTo(b?.Size ?? 0) ?? 0,
+                        CompareDescending = (a, b) => b?.Size.CompareTo(a?.Size ?? 0) ?? 0,
+                    }),
+
+                new TextColumn<TreeNode, DateTime?>("Last Modified", x => x.LastModified,
+                    options: new TextColumnOptions<TreeNode>
+                    {
+                        TextAlignment = TextAlignment.Right,
+                        CanUserResizeColumn = true,
+                        CanUserSortColumn = true,
+                        CompareAscending = (a, b) => Nullable.Compare(a?.LastModified, b?.LastModified),
+                        CompareDescending = (a, b) => Nullable.Compare(b?.LastModified, a?.LastModified),
+                    }),
+                new TextColumn<TreeNode, string>("Path", x => x.FullPath, options: new TextColumnOptions<TreeNode>
+                {
+                    TextTrimming = TextTrimming.PathSegmentEllipsis,
+                    CanUserSortColumn = false,
+                    MaxWidth = new GridLength((viewWidth ?? 900) / 3), // this will make the path column take up at most 1/3 of the window width
+                }),
+            }
+        };
+        return source;
+    }
+    
+    //TODO do the plan-mvvmRefactoring.prompt.md
+    
+    /// <summary>
+    /// Recursively updates the IsEnabled state for all descendants.
+    /// Children are disabled if they have any ancestor that is selected.
+    /// </summary>
+    private static void UpdateChildrenEnabledState(TreeNode node)
+    {
+        foreach (var child in node.Children)
+        {
+            child.IsEnabled = !IsAnyAncestorSelected(child);
+            // Recursively update grandchildren
+            UpdateChildrenEnabledState(child);
+        }
+    }
+
+    private static bool IsAnyAncestorSelected(TreeNode node)
+    {
+        var current = node.Parent;
+        while (current != null)
+        {
+            if (current.IsSelected)
+                return true;
+            current = current.Parent;
+        }
+        return false;
     }
 }

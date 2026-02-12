@@ -35,6 +35,9 @@ public partial class TreeNode : ObservableObject
 
     [ObservableProperty]
     private bool _isSelected; // For checkbox multi-select
+    
+    [ObservableProperty]
+    private bool _isEnabled = true; // disable/enable state of the UI checkbox
 
     [ObservableProperty]
     private bool _isExpanded; // Triggers lazy load

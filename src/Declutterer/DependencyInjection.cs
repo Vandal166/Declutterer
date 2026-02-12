@@ -19,6 +19,7 @@ public static class DependencyInjection
         collection.AddSingleton<ScanFilterService>();
         collection.AddSingleton<DirectoryScanService>();
         collection.AddSingleton<IIconLoader, IconLoaderService>();
+        collection.AddSingleton<TreeGridInteractionService>();
         
         collection.AddSingleton<SmartSelectionScorer>();
         collection.AddSingleton<SmartSelectionService>();
