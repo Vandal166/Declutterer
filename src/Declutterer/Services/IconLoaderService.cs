@@ -5,17 +5,21 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Declutterer.Abstractions;
 
 namespace Declutterer.Services;
-
-public interface IIconLoader
-{
-    Task<Bitmap?> LoadIconAsync(string fullPath, bool isDirectory = false);
-}
 
 public class IconLoaderService : IIconLoader
 {
     private static readonly ConcurrentDictionary<string, Bitmap> _iconCache = new();
+
+    /// <summary>
+    /// Clears the icon bitmap cache. Call this before a new scan to ensure icons are reloaded.
+    /// </summary>
+    public static void ClearCache()
+    {
+        _iconCache.Clear();
+    }
 
     public async Task<Bitmap?> LoadIconAsync(string fullPath, bool isDirectory = false)
     {

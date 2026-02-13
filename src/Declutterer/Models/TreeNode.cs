@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.ObjectModel;
-using System.IO;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Declutterer.Common;
@@ -34,10 +33,10 @@ public partial class TreeNode : ObservableObject
     private bool _isDirectory;
 
     [ObservableProperty]
-    private bool _isSelected; // For checkbox multi-select
+    private bool _isCheckboxSelected; // For checkbox multi-select
     
     [ObservableProperty]
-    private bool _isEnabled = true; // disable/enable state of the UI checkbox
+    private bool _isCheckboxEnabled = true; // disable/enable state of the UI checkbox
 
     [ObservableProperty]
     private bool _isExpanded; // Triggers lazy load
@@ -54,5 +53,6 @@ public partial class TreeNode : ObservableObject
     // Children (lazy-initialized) - TreeDataGrid reads this for hierarchical display
     public ObservableCollection<TreeNode> Children { get; private set; } = new();
 
-    public Bitmap? Icon { get; set; } // The icon associated with this node (file or folder), loaded asynchronously could be null
+    [ObservableProperty]
+    private Bitmap? _icon = null; // The icon associated with this node (file or folder), loaded asynchronously could be null
 }

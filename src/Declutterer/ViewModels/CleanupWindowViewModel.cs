@@ -86,7 +86,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
                 oldFiles.Add(item);
             }
         }
-        
+        //TODO: display alos the count , example: "5 Large Files (>100MB)"
         // Add Large Directories group
         if (largeDirectories.Count > 0)
         {

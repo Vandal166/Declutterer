@@ -105,8 +105,8 @@ public sealed class DirectoryScanService
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
                         HasChildren = hasSubDirs,
-                        IsSelected = parentNode.IsSelected, // inherit selection state from parent
-                        IsEnabled = !parentNode.IsSelected // if parent is selected then disable the checkbox for the child since we dont want to allow unselecting a child when parent is selected, this simplifies the logic and avoids edge cases with selection state
+                        IsCheckboxSelected = parentNode.IsCheckboxSelected, // inherit selection state from parent
+                        IsCheckboxEnabled = !parentNode.IsCheckboxSelected // if parent is selected then disable the checkbox for the child since we dont want to allow unselecting a child when parent is selected, this simplifies the logic and avoids edge cases with selection state
                     };
                             
                     // Apply filter(filtering out nodes that dont match the criteria)
@@ -148,8 +148,8 @@ public sealed class DirectoryScanService
                         LastModified = file.LastWriteTime,
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
-                        IsSelected = parentNode.IsSelected, // inherit selection state from parent
-                        IsEnabled = !parentNode.IsSelected
+                        IsCheckboxSelected = parentNode.IsCheckboxSelected, // inherit selection state from parent
+                        IsCheckboxEnabled = !parentNode.IsCheckboxSelected
                     };
 
                     if (filter != null && !filter(childNode))
@@ -197,8 +197,8 @@ public sealed class DirectoryScanService
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
                         HasChildren = hasSubDirs,
-                        IsSelected = parentNode.IsSelected, // inherit selection state from parent
-                        IsEnabled = !parentNode.IsSelected
+                        IsCheckboxSelected = parentNode.IsCheckboxSelected, // inherit selection state from parent
+                        IsCheckboxEnabled = !parentNode.IsCheckboxSelected
                     };
                     
                     if (filter != null && !filter(childNode))

@@ -1,4 +1,5 @@
-﻿using Declutterer.Services;
+﻿using Declutterer.Abstractions;
+using Declutterer.Services;
 using Declutterer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
@@ -19,7 +20,9 @@ public static class DependencyInjection
         collection.AddSingleton<ScanFilterService>();
         collection.AddSingleton<DirectoryScanService>();
         collection.AddSingleton<IIconLoader, IconLoaderService>();
+        collection.AddSingleton<IconLoadingService>();
         collection.AddSingleton<TreeGridInteractionService>();
+        collection.AddSingleton<IDispatcher, AvaloniaDispatcher>(); 
         
         collection.AddSingleton<SmartSelectionScorer>();
         collection.AddSingleton<SmartSelectionService>();

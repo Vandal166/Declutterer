@@ -5,15 +5,9 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
-using Avalonia.Controls.Models.TreeDataGrid;
-using Avalonia.Controls.Primitives;
-using Avalonia.Controls.Templates;
-using Avalonia.Input;
-using Avalonia.Layout;
-using Avalonia.LogicalTree;
-using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Declutterer.Abstractions;
 using Declutterer.Common;
 using Declutterer.Models;
 using Declutterer.Services;
@@ -35,7 +29,9 @@ public partial class MainWindowViewModel : ViewModelBase
     
     private readonly DirectoryScanService _directoryScanService;
     private readonly SmartSelectionService _smartSelectionService;
-    private readonly IIconLoader _iconLoaderService;
+    
+    private readonly IDispatcher _dispatcher;
+    private readonly IconLoadingService _iconLoadingService;
     
     private bool _isUpdatingSelection = false; // Guard against re-entrancy during recursive selection updates
 
@@ -49,13 +45,14 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableHashSet<TreeNode> SelectedNodes { get; } = new(); // the currently selected nodes in the TreeDataGrid
     private readonly HashSet<TreeNode> _subscribedNodes = new();
     
-    public MainWindowViewModel(DirectoryScanService directoryScanService, IIconLoader iconLoaderService, SmartSelectionService smartSelectionService)
+    public MainWindowViewModel(DirectoryScanService directoryScanService, SmartSelectionService smartSelectionService, IDispatcher dispatcher, IconLoadingService iconLoadingService)
     {
         _directoryScanService = directoryScanService;
-        _iconLoaderService = iconLoaderService;
         _smartSelectionService = smartSelectionService;
+        _dispatcher = dispatcher;
+        _iconLoadingService = iconLoadingService;
 
-        // Wire up selection change tracking
+        // selection change tracking
         SelectedNodes.CollectionChanged += (s, e) =>
         {
             UpdateSelectedNodesSize();
@@ -79,6 +76,7 @@ public partial class MainWindowViewModel : ViewModelBase
         try
         {
             var children = await _directoryScanService.LoadChildrenAsync(node, _currentScanOptions);
+            
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
             {
                 foreach (var child in children)
@@ -105,6 +103,7 @@ public partial class MainWindowViewModel : ViewModelBase
             return; // Already loaded
 
         var children = await _directoryScanService.LoadChildrenAsync(node, _currentScanOptions);
+        
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
         {
             foreach (var child in children)
@@ -130,7 +129,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         foreach (var node in SelectedNodes.ToList())
         {
-            node.IsSelected = false; // This will trigger the UI to uncheck the node and also update the SelectedNodes collection through the binding
+            node.IsCheckboxSelected = false; // This will trigger the UI to uncheck the node and also update the SelectedNodes collection through the binding
         }
         SelectedNodes.Clear();
     }
@@ -147,7 +146,7 @@ public partial class MainWindowViewModel : ViewModelBase
             var toSelect = _smartSelectionService.Select(rootChild, _currentScanOptions, new ScorerOptions());
             foreach (var selectedNode in toSelect)
             {
-                selectedNode.IsSelected = true; // Update the node's selection state for UI binding
+                selectedNode.IsCheckboxSelected = true; // Update the node's selection state for UI binding
                 SelectedNodes.Add(selectedNode);
             }
         }
@@ -170,8 +169,13 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 _currentScanOptions = result;
 
+                // Clear all cached icons so icons are reloaded on re-scans
+                _iconLoadingService.ClearLoadedPathsCache();
+                IconLoaderService.ClearCache();
+
                 Roots.Clear();
                 NoChildrenFound = false;
+                _subscribedNodes.Clear(); // Clear subscriptions for old roots
 
                 var validRoots = new List<TreeNode>();
                 foreach (var directoryPath in _currentScanOptions.DirectoriesToScan.Where(Directory.Exists))
@@ -184,6 +188,7 @@ public partial class MainWindowViewModel : ViewModelBase
                     }
                     catch (UnauthorizedAccessException){/*skip*/}
                 }
+
 
                 await LoadChildrenParallelAsync(validRoots);
             }
@@ -208,10 +213,10 @@ public partial class MainWindowViewModel : ViewModelBase
                     
             // Reset the flag since we found children
             NoChildrenFound = false;
-            
-            // Batch UI updates to reduce dispatcher overhead - add children in chunks
+
+            // Batch UI updates to reduce dispatcher overhead
             const int batchSize = 100;
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            await _dispatcher.InvokeAsync(() =>
             {
                 foreach (var root in validRoots)
                 {
@@ -243,11 +248,6 @@ public partial class MainWindowViewModel : ViewModelBase
         if (SelectedNodes.Count == 0)
             return;
 
-        foreach (var node in SelectedNodes)
-        {
-            var icon = await _iconLoaderService.LoadIconAsync(node.FullPath, node.IsDirectory);
-            node.Icon = icon; // Update the node's icon property with the loaded icon, this
-        }
         var cleanupWindow = new CleanupWindow
         {
             DataContext = new CleanupWindowViewModel(SelectedNodes.ToList()) // passing the selected nodes to the CleanupWindowViewModel so it can display them and perform cleanup actions
@@ -265,7 +265,7 @@ public partial class MainWindowViewModel : ViewModelBase
         
         node.PropertyChanged += (sender, args) =>
         {
-            if (args.PropertyName == nameof(TreeNode.IsSelected))
+            if (args.PropertyName == nameof(TreeNode.IsCheckboxSelected))
             {
                 OnTreeNodeSelectionChanged(node);
             }
@@ -281,14 +281,14 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
 
         // Update SelectedNodes collection
-        if (node.IsSelected)
+        if (node.IsCheckboxSelected)
         {
             SelectedNodes.Add(node);
             
             // removing all descendants from SelectedNodes since parent selection encompasses them
             RemoveDescendantsFromSelectedNodes(node);
             
-            // But still update children's IsSelected visual state
+            // But still update children's IsSelected visual state(they are gonna have their checkboxes disabled)
             if (node.Children.Count > 0)
             {
                 SetIsSelectedRecursively(node.Children, true);
@@ -348,9 +348,9 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             
             // Only update if the value is different to avoid unnecessary property change notifications
-            if (child.IsSelected != isSelected)
+            if (child.IsCheckboxSelected != isSelected)
             {
-                child.IsSelected = isSelected;
+                child.IsCheckboxSelected = isSelected;
                 
                 // Only update the SelectedNodes collection when deselecting
                 // When selecting, we don't add children since parent selection should be enough
@@ -371,122 +371,22 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void UpdateNodeSelection((TreeNode, bool) nodeAndSelection)
+    public void UpdateNodeSelection(SelectionUpdateRequest request)
     {
-        var (node, isSelected) = nodeAndSelection;
-        if (node.IsSelected == isSelected)
+        if (request.Node.IsCheckboxSelected == request.IsCheckboxSelected)
             return; // No change, skip
 
-        node.IsSelected = isSelected;
+        request.Node.IsCheckboxSelected = request.IsCheckboxSelected;
 
-        if (isSelected)
+        if (request.IsCheckboxSelected)
         {
-            SelectedNodes.Add(node);
+            SelectedNodes.Add(request.Node);
         }
         else
         {
-            SelectedNodes.Remove(node);
+            SelectedNodes.Remove(request.Node);
         }
     }
-    
-    public HierarchicalTreeDataGridSource<TreeNode> CreateTreeDataGridSource(MainWindowViewModel viewModel, double? viewWidth = null)
-    {
-        var source = new HierarchicalTreeDataGridSource<TreeNode>(viewModel.Roots)
-        {
-            Columns =
-            {
-                new TemplateColumn<TreeNode>("Select", 
-                    new FuncDataTemplate<TreeNode>((node, _) =>
-                    {
-                        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
-                        if(node is null)
-                            return null;
-                        //TODO make parent distinct from child nodes visually
-                                
-                        // Don't create checkbox for root nodes (Depth == 0)
-                        if (node.Depth == 0)
-                        {
-                            node.IsExpanded = true; // auto expanded root node
-                            return new Control();
-                        }
-                                
-                        var checkBox = new CheckBox
-                        {
-                            IsChecked = node.IsSelected,
-                            HorizontalAlignment = HorizontalAlignment.Center,
-                        };
-                        
-                        // Bind IsChecked to TreeNode.IsSelected
-                        checkBox.Bind(ToggleButton.IsCheckedProperty, new Avalonia.Data.Binding(nameof(TreeNode.IsSelected))
-                        {
-                            Source = node,
-                            Mode = Avalonia.Data.BindingMode.TwoWay
-                        });
-                        
-                        // Bind IsEnabled to TreeNode.IsEnabled
-                        checkBox.Bind(InputElement.IsEnabledProperty, new Avalonia.Data.Binding(nameof(TreeNode.IsEnabled))
-                        {
-                            Source = node,
-                            Mode = Avalonia.Data.BindingMode.OneWay
-                        });
-                        
-                        // Sync from CheckBox to TreeNode
-                        checkBox.IsCheckedChanged += (s, e) =>
-                        {
-                            viewModel.UpdateNodeSelection((node, checkBox.IsChecked.Value));
-                        };
-                                
-                        return checkBox;
-                    }, supportsRecycling: false), // Disable recycling to ensure each node has its own CheckBox
-                    options: new TemplateColumnOptions<TreeNode>
-                    {
-                        CanUserResizeColumn = false,
-                        CanUserSortColumn = false,
-                    }),
-                new HierarchicalExpanderColumn<TreeNode>(
-                    new TextColumn<TreeNode, string>("Name", x => x.Name, options: new TextColumnOptions<TreeNode>
-                    {
-                        TextTrimming = TextTrimming.PrefixCharacterEllipsis,
-                        CanUserResizeColumn = true,
-                        MaxWidth = new GridLength(400),
-                        CanUserSortColumn = true,
-                        CompareAscending = (a, b) => string.Compare(a?.Name, b?.Name, StringComparison.OrdinalIgnoreCase),
-                        CompareDescending = (a, b) => string.Compare(b?.Name, a?.Name, StringComparison.OrdinalIgnoreCase),
-                    }),
-                    x => x.Children,
-                    x => x.HasChildren,
-                    x => x.IsExpanded),
-                new TextColumn<TreeNode, string>("Size", x => x.SizeFormatted,
-                    options: new TextColumnOptions<TreeNode>
-                    {
-                        TextAlignment = TextAlignment.Right,
-                        CanUserResizeColumn = true,
-                        CanUserSortColumn = true,
-                        CompareAscending = (a, b) => a?.Size.CompareTo(b?.Size ?? 0) ?? 0,
-                        CompareDescending = (a, b) => b?.Size.CompareTo(a?.Size ?? 0) ?? 0,
-                    }),
-
-                new TextColumn<TreeNode, DateTime?>("Last Modified", x => x.LastModified,
-                    options: new TextColumnOptions<TreeNode>
-                    {
-                        TextAlignment = TextAlignment.Right,
-                        CanUserResizeColumn = true,
-                        CanUserSortColumn = true,
-                        CompareAscending = (a, b) => Nullable.Compare(a?.LastModified, b?.LastModified),
-                        CompareDescending = (a, b) => Nullable.Compare(b?.LastModified, a?.LastModified),
-                    }),
-                new TextColumn<TreeNode, string>("Path", x => x.FullPath, options: new TextColumnOptions<TreeNode>
-                {
-                    TextTrimming = TextTrimming.PathSegmentEllipsis,
-                    CanUserSortColumn = false,
-                    MaxWidth = new GridLength((viewWidth ?? 900) / 3), // this will make the path column take up at most 1/3 of the window width
-                }),
-            }
-        };
-        return source;
-    }
-    
-    //TODO do the plan-mvvmRefactoring.prompt.md
     
     /// <summary>
     /// Recursively updates the IsEnabled state for all descendants.
@@ -496,7 +396,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         foreach (var child in node.Children)
         {
-            child.IsEnabled = !IsAnyAncestorSelected(child);
+            child.IsCheckboxEnabled = !IsAnyAncestorSelected(child);
             // Recursively update grandchildren
             UpdateChildrenEnabledState(child);
         }
@@ -507,7 +407,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var current = node.Parent;
         while (current != null)
         {
-            if (current.IsSelected)
+            if (current.IsCheckboxSelected)
                 return true;
             current = current.Parent;
         }

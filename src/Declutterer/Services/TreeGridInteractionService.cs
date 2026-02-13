@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -14,15 +16,58 @@ namespace Declutterer.Services;
 
 public sealed class TreeGridInteractionService
 {
-    private readonly MainWindowViewModel _mainWindowViewModel;
-    public bool IsExpandingAll { get; private set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
+    private readonly MainWindowViewModel _viewModel;
+    private readonly IconLoadingService _iconLoadingService;
+    
+    private bool IsExpandingAll { get; set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
+    private double _lastPointerPressedTime = 0; // For detecting double-clicks on expanders
 
-    public TreeGridInteractionService(MainWindowViewModel mainWindowViewModel)
+    //TODO: for some reason the Alt+Click loading will be trigered when COLLAPSING
+    
+    //TODO 2: analyze if there is an unsubcribtion needed
+    public TreeGridInteractionService(MainWindowViewModel viewModel, IconLoadingService iconLoadingService)
     {
-        _mainWindowViewModel = mainWindowViewModel;
+        _viewModel = viewModel;
+        _iconLoadingService = iconLoadingService;
     }
     
-    public void InitializeHandler(TreeDataGrid treeDataGrid)
+    /// <summary>
+    /// Initializes all necessary event handlers for the TreeDataGrid
+    /// </summary>
+    public void InitializeHandlers(TreeDataGrid treeDataGrid, HierarchicalTreeDataGridSource<TreeNode> source)
+    {
+        // sub to row expanding event to trigger lazy loading
+        InitializeRowExpandingHandler(source);
+        
+        InitializeIconHandler();
+
+        InitializeRowCollapsingHandler(source);
+        
+        // Handle pointer events to detect Alt+Click on expander
+        InitializePointerPressedHandler(treeDataGrid);
+                
+        InitializePointerPressedEvent(treeDataGrid);
+    }
+
+    private void InitializeIconHandler()
+    {
+        _viewModel.Roots.CollectionChanged += (sender, args) =>
+        {
+            // When the Roots collection changes (e.g. new scan), subscribe to new root nodes and load their icons
+            foreach (var root in _viewModel.Roots)
+            {
+                _viewModel.SubscribeToNodeSelectionChanges(root);
+    
+                // Load icon for root node
+                if (root.Icon is null)
+                {
+                    _ = _iconLoadingService.LoadIconForRootAsync(root);
+                }
+            }
+        };
+    }
+
+    private void InitializePointerPressedEvent(TreeDataGrid treeDataGrid)
     {
         treeDataGrid.AddHandler(InputElement.PointerPressedEvent, (sender, args) =>
         {
@@ -58,7 +103,75 @@ public sealed class TreeGridInteractionService
             }
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
     }
-    
+
+    private void InitializePointerPressedHandler(TreeDataGrid treeDataGrid)
+    {
+        treeDataGrid.PointerPressed += async (sender, args) =>
+        {
+            if(IsExpandingAll)
+                return;
+            
+            if(args.GetCurrentPoint(treeDataGrid).Properties.IsLeftButtonPressed)
+            {
+                double currentTime = args.Timestamp;
+                if (currentTime - _lastPointerPressedTime < 300) // 300ms threshold for double-click
+                {
+                    //TODO let the vm handle and open in explroer on double click
+                    return;
+                }
+                _lastPointerPressedTime = currentTime;
+            }
+        };
+    }
+
+    private void InitializeRowCollapsingHandler(HierarchicalTreeDataGridSource<TreeNode> source)
+    {
+        source.RowCollapsing += (_, args) =>
+        {
+            if(IsExpandingAll)
+                return;
+            
+            if (args.Row.Model is TreeNode node) // setting IsExpanded to false on collapse for the node
+            {
+                node.IsExpanded = false;
+            }
+        };
+    }
+
+    private void InitializeRowExpandingHandler(HierarchicalTreeDataGridSource<TreeNode> source)
+    {
+        source.RowExpanding += async (sender, args) =>
+        {
+            if(IsExpandingAll) 
+                return; // Skip if we're already in the middle of an expand/collapse all operation triggered by Alt+Click
+            
+            if (args.Row.Model is { IsDirectory: true, HasChildren: true} node)
+            {
+                // if children not loaded yet then load them and skip loading children for root nodes since we already load them with children in the initial scan
+                // NOTE: this fixed the duplicate entries issue
+                if (node.Children.Count == 0 && node.Depth != 0) 
+                {
+                    await _viewModel.LoadChildrenForNodeAsync(node);
+                }
+               
+                // Pre-load grandchildren for any child directories that don't have their children loaded yet
+                foreach (var child in node.Children.Where(c => c is { IsDirectory: true, HasChildren: true, Children.Count: 0 }))
+                {
+                    _ = _viewModel.LoadChildrenForNodeAsync(child);
+                }
+                
+                // Subscribe to PropertyChanged for each child to detect IsSelected changes
+                foreach (var child in node.Children)
+                {
+                    _viewModel.SubscribeToNodeSelectionChanges(child);
+                }
+                
+                // Request lazy loading of icons for visible children
+                _iconLoadingService.RequestIconLoadForVisibleNodes(node.Children);
+            }
+        };
+    }
+
     private async Task HandleAltClickExpandAsync(TreeNode node, bool shouldExpand)
     {
         var sw = new Stopwatch();
@@ -93,7 +206,7 @@ public sealed class TreeGridInteractionService
         // Load children if not already loaded
         if (node.Children.Count == 0 && node is { IsDirectory: true, HasChildren: true })
         {
-            await _mainWindowViewModel.LoadChildrenParallelAsync(new List<TreeNode>() { node});
+            await _viewModel.LoadChildrenParallelAsync(new List<TreeNode>() { node});
         }
         
         foreach (var child in node.Children)
