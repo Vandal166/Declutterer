@@ -55,11 +55,17 @@ public static class CheckBoxSelectionBehavior
             if (_isCheckedChangedHandler != null)
             {
                 _checkBox.IsCheckedChanged -= _isCheckedChangedHandler;
-                _isCheckedChangedHandler = null;
             }
         }
     }
     
+    /// <summary>
+    /// Attaches checkbox selection behavior to a TreeNode.
+    /// </summary>
+    /// <param name="checkBox">The checkbox control to attach to</param>
+    /// <param name="node">The TreeNode to synchronize with</param>
+    /// <param name="viewModel">The MainWindowViewModel for selection updates</param>
+    /// <returns>An IDisposable that must be disposed to clean up event subscriptions and prevent memory leaks</returns>
     public static IDisposable AttachToNode(CheckBox checkBox, TreeNode node, MainWindowViewModel viewModel)
     {
         return new CheckBoxAttachment(checkBox, node, viewModel);
