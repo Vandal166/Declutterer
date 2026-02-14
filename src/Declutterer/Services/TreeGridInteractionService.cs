@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
-using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -21,8 +19,6 @@ public sealed class TreeGridInteractionService
     
     private bool IsExpandingAll { get; set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
     private double _lastPointerPressedTime = 0; // For detecting double-clicks on expanders
-
-    //TODO: for some reason the Alt+Click loading will be trigered when COLLAPSING
     
     //TODO 2: analyze if there is an unsubcribtion needed
     public TreeGridInteractionService(MainWindowViewModel viewModel, IconLoadingService iconLoadingService)
@@ -204,9 +200,9 @@ public sealed class TreeGridInteractionService
     private async Task ToggleAllDescendantsAsync(TreeNode node, bool shouldExpand, bool isRoot = false)
     {
         // Load children if not already loaded
-        if (node.Children.Count == 0 && node is { IsDirectory: true, HasChildren: true })
+        if (node.Children.Count == 0 && node is { IsDirectory: true, HasChildren: true } && shouldExpand)
         {
-            await _viewModel.LoadChildrenParallelAsync(new List<TreeNode>() { node});
+            await _viewModel.LoadChildrenParallelAsync(new List<TreeNode> { node});
         }
         
         foreach (var child in node.Children)

@@ -86,13 +86,13 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
                 oldFiles.Add(item);
             }
         }
-        //TODO: display alos the count , example: "5 Large Files (>100MB)"
+        
         // Add Large Directories group
         if (largeDirectories.Count > 0)
         {
             GroupedItems.Add(new ItemGroup
             {
-                GroupName = "Large Directories (>100MB)",
+                GroupName = $"{largeDirectories.Count} Large Directories (>100MB)",
                 Items = new ObservableCollection<TreeNode>(largeDirectories)
             });
         }
@@ -102,7 +102,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
         {
             GroupedItems.Add(new ItemGroup
             {
-                GroupName = "Large Files (>100MB)",
+                GroupName = $"{largeFiles.Count} Large Files (>100MB)",
                 Items = new ObservableCollection<TreeNode>(largeFiles)
             });
         }
@@ -112,7 +112,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
         {
             GroupedItems.Add(new ItemGroup
             {
-                GroupName = "Old Files (Unused for 2+ years)",
+                GroupName = $"{oldFiles.Count} Old Files (Last Modified > 2 years ago)",
                 Items = new ObservableCollection<TreeNode>(oldFiles)
             });
         }
@@ -125,7 +125,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
         {
             GroupedItems.Add(new ItemGroup
             {
-                GroupName = "Other Items",
+                GroupName = $"{otherItems.Count} Other Items",
                 Items = new ObservableCollection<TreeNode>(otherItems)
             });
         }

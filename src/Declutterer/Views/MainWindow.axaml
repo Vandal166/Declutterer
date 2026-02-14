@@ -389,9 +389,18 @@
                     Command="{Binding ShowCleanupWindowCommand}"
                     Content="Review &amp; Cleanup"
                     FontSize="13"
+                    Foreground="Black"
                     Grid.Column="4"
                     HorizontalAlignment="Right"
-                    Padding="16,8" />
+                    IsEnabled="{Binding SelectedNodes.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
+                    Name="ReviewCleanupButton"
+                    Padding="16,8">
+                    <Button.Styles>
+                        <Style Selector="Button#ReviewCleanupButton:disabled /template/ ContentPresenter#PART_ContentPresenter">
+                            <Setter Property="Foreground" Value="Gray" />
+                        </Style>
+                    </Button.Styles>
+                </Button>
             </Grid>
         </Border>
     </Grid>

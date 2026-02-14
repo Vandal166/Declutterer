@@ -50,7 +50,13 @@ public sealed class DirectoryScanService
         return rootNode;
     }
     
-    public async Task<List<TreeNode>> LoadChildrenAsync(TreeNode node, ScanOptions? scanOptions)
+    /// <summary>
+    /// Loads the child nodes (subdirectories and files) for a given TreeNode representing a directory.
+    /// </summary>
+    /// <param name="node">The TreeNode for which to load children. Must represent a directory.</param>
+    /// <param name="scanOptions">The options to apply when scanning for children, such as filters. Can be null for no filtering.</param>
+    /// <returns>A collection of TreeNodes representing the children of the specified node.</returns>
+    public Task<List<TreeNode>> LoadChildrenAsync(TreeNode node, ScanOptions? scanOptions)
     {
         var children = new List<TreeNode>();
         
@@ -58,17 +64,13 @@ public sealed class DirectoryScanService
         
         try
         {
-             // Run the directory scanning on a background thread to avoid blocking the UI
-            await Task.Run(() =>
-            {
-                var filter = _scanFilterService.CreateFilter(scanOptions);
-                
-                var dirInfo = new DirectoryInfo(node.FullPath);
-                
-                LoadSubdirectories(node, dirInfo, filter, children);
-                
-                LoadFiles(node, dirInfo, filter, children);
-            });
+            var filter = _scanFilterService.CreateFilter(scanOptions);
+            
+            var dirInfo = new DirectoryInfo(node.FullPath);
+            
+            LoadSubdirectories(node, dirInfo, filter, children);
+            
+            LoadFiles(node, dirInfo, filter, children);
             
             _logger.LogInformation("Loaded {ChildrenCount} children for node: {NodePath}", children.Count, node.FullPath);
         }
@@ -77,7 +79,7 @@ public sealed class DirectoryScanService
             _logger.LogError(ex, "Error loading children for node: {NodePath}", node.FullPath);
         }
         
-        return children;
+        return Task.FromResult(children);
     }
     
     private void LoadSubdirectories(TreeNode parentNode, DirectoryInfo dirInfo, Func<TreeNode, bool>? filter, List<TreeNode> children)
@@ -85,7 +87,17 @@ public sealed class DirectoryScanService
         // Get subdirectories
         try
         {
-            foreach (var dir in dirInfo.GetDirectories())
+            var enumerationOptions = new EnumerationOptions
+            {
+                IgnoreInaccessible = true,
+                RecurseSubdirectories = false,
+                BufferSize = 64 * 1024, // 64KB buffer for enumeration
+                AttributesToSkip = FileAttributes.System | FileAttributes.Hidden | FileAttributes.Temporary | FileAttributes.Offline | FileAttributes.Encrypted,
+                ReturnSpecialDirectories = false
+            };
+            
+            // getting subdirectories in the current root directory we are in
+            foreach (var dir in dirInfo.GetDirectories("*", enumerationOptions)) 
             {
                 try
                 {

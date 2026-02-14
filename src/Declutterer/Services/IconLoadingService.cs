@@ -102,7 +102,7 @@ public class IconLoadingService
             {
                 node.Icon = icon;
                 _loadedPaths.Add(node.FullPath);
-                Log.Information($"Icon loaded for node: {node.FullPath}");
+                Log.Information("Icon loaded for node: {NodeFullPath}", node.FullPath);
             }
         }
         catch (Exception ex)

@@ -15,6 +15,8 @@ using Declutterer.Views;
 
 namespace Declutterer.ViewModels;
 
+//TODO: add exclusions for Directories so they won't be scanned at all, not even shown in the tree, Persist the exclusions in some form of settings like json file
+
 public partial class MainWindowViewModel : ViewModelBase
 {
     // ObservableProperty is used to generate the property with INotifyPropertyChanged implementation which will notify the UI when the property changes
