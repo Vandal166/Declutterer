@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,7 +19,7 @@ namespace Declutterer.ViewModels;
 
 //TODO: add exclusions for Directories so they won't be scanned at all, not even shown in the tree, Persist the exclusions in some form of settings like json file
 
-public partial class MainWindowViewModel : ViewModelBase
+public partial class MainWindowViewModel : ViewModelBase, IDisposable
 {
     // ObservableProperty is used to generate the property with INotifyPropertyChanged implementation which will notify the UI when the property changes
     [ObservableProperty]
@@ -46,6 +48,7 @@ public partial class MainWindowViewModel : ViewModelBase
     
     public ObservableHashSet<TreeNode> SelectedNodes { get; } = new(); // the currently selected nodes in the TreeDataGrid
     private readonly HashSet<TreeNode> _subscribedNodes = new();
+    private readonly Dictionary<TreeNode, PropertyChangedEventHandler> _nodePropertyHandlers = new();
     
     public MainWindowViewModel(DirectoryScanService directoryScanService, SmartSelectionService smartSelectionService, IDispatcher dispatcher, IconLoadingService iconLoadingService)
     {
@@ -55,10 +58,12 @@ public partial class MainWindowViewModel : ViewModelBase
         _iconLoadingService = iconLoadingService;
 
         // selection change tracking
-        SelectedNodes.CollectionChanged += (s, e) =>
-        {
-            UpdateSelectedNodesSize();
-        };
+        SelectedNodes.CollectionChanged += OnSelectedNodesCollectionChanged;
+    }
+
+    private void OnSelectedNodesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        UpdateSelectedNodesSize();
     }
 
     public MainWindowViewModel() { } // for designer
@@ -66,7 +71,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private void UpdateSelectedNodesSize()
     {
         var selectedNodesSize = SelectedNodes.Sum(n => n.Size);
-        SelectedNodesSizeText = ByteConverter.ToReadableString(selectedNodesSize);
+        SelectedNodesSizeText = Common.ByteConverter.ToReadableString(selectedNodesSize);
     }
 
     // Loads subdirectories and files for a given node when it's expanded. This is called from the UI when a node is expanded.
@@ -80,7 +85,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var children = await _directoryScanService.LoadChildrenAsync(node, _currentScanOptions);
             
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            await _dispatcher.InvokeAsync(() =>
             {
                 foreach (var child in children)
                 {
@@ -107,7 +112,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var children = await _directoryScanService.LoadChildrenAsync(node, _currentScanOptions);
         
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        await _dispatcher.InvokeAsync(() =>
         {
             foreach (var child in children)
             {
@@ -176,9 +181,12 @@ public partial class MainWindowViewModel : ViewModelBase
                 _iconLoadingService.ClearLoadedPathsCache();
                 IconLoaderService.ClearCache();
 
+                // Clean up old subscriptions before clearing roots
+                UnsubscribeFromAllNodes();
+                
                 Roots.Clear();
                 NoChildrenFound = false;
-                _subscribedNodes.Clear(); // Clear subscriptions for old roots
+                _subscribedNodes.Clear();
 
                 var validRoots = new List<TreeNode>();
                 foreach (var directoryPath in _currentScanOptions.DirectoriesToScan.Where(Directory.Exists))
@@ -266,13 +274,26 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!_subscribedNodes.Add(node))
             return; // preventing another subscription for the same node, example after collapsing/expanding which can trigger multiple PropertyChanged events for the same node
         
-        node.PropertyChanged += (sender, args) =>
+        // Create and store the handler so we can unsubscribe later
+        PropertyChangedEventHandler handler = (sender, args) =>
         {
             if (args.PropertyName == nameof(TreeNode.IsCheckboxSelected))
             {
                 OnTreeNodeSelectionChanged(node);
             }
         };
+        
+        _nodePropertyHandlers[node] = handler;
+        node.PropertyChanged += handler;
+    }
+    
+    private void UnsubscribeFromAllNodes()
+    {
+        foreach (var kvp in _nodePropertyHandlers)
+        {
+            kvp.Key.PropertyChanged -= kvp.Value;
+        }
+        _nodePropertyHandlers.Clear();
     }
     /// <summary>
     /// Called whenever a TreeNode's IsSelected property changes.
@@ -415,5 +436,14 @@ public partial class MainWindowViewModel : ViewModelBase
             current = current.Parent;
         }
         return false;
+    }
+
+    public void Dispose()
+    {
+        // Unsubscribe from SelectedNodes collection changes
+        SelectedNodes.CollectionChanged -= OnSelectedNodesCollectionChanged;
+        
+        // Unsubscribe from all node property changes
+        UnsubscribeFromAllNodes();
     }
 }
