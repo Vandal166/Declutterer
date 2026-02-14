@@ -104,12 +104,13 @@ public sealed class SmartSelectionScorer
 
     private static double ComputeSizeScore(TreeNode node, ScanOptions scanOptions, ScorerOptions scorerOptions, (long MaxSize, DateTime? OldestDate, DateTime? NewestDate) stats) 
     {
+        //TODO - consider directory size if node is a directory and DirectorySizeFilter is enabled
         // If size filter is not enabled, return neutral score
-        if (!scanOptions.EntrySizeFilter.UseSizeFilter || scanOptions.EntrySizeFilter.SizeThreshold <= 0 || stats.MaxSize <= 0) 
+        if (!scanOptions.FileSizeFilter.UseSizeFilter || scanOptions.FileSizeFilter.SizeThreshold <= 0 || stats.MaxSize <= 0) 
             return 0.5;
 
         // Convert threshold from MB to bytes (same as ScanFilterService does)
-        long thresholdBytes = scanOptions.EntrySizeFilter.SizeThreshold * 1024 * 1024;
+        long thresholdBytes = scanOptions.FileSizeFilter.SizeThreshold * 1024 * 1024;
         var maxSize = Math.Max(stats.MaxSize, thresholdBytes); // avoid div by zero
         double sizeValue = node.Size;
 

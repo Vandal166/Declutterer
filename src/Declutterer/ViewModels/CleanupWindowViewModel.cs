@@ -87,6 +87,8 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
             }
         }
         
+        //TODO display the largest first.
+        
         // Add Large Directories group
         if (largeDirectories.Count > 0)
         {

@@ -161,23 +161,38 @@
 
                 <!--  Size Rules  -->
                 <HeaderedContentControl Classes="indented" Header="Size Filters">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <CheckBox IsChecked="{Binding ScanOptions.EntrySizeFilter.UseSizeFilter}" VerticalAlignment="Center" />
-                        <TextBlock Text="Include Larger than" VerticalAlignment="Center" />
-                        <NumericUpDown
-                            FormatString="N0"
-                            MaxWidth="250"
-                            Maximum="100000"
-                            MinWidth="120"
-                            Minimum="1"
-                            Value="{Binding ScanOptions.EntrySizeFilter.SizeThreshold, TargetNullValue=1}" />
-                        <TextBlock Text="MB" VerticalAlignment="Center" />
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <CheckBox IsChecked="{Binding ScanOptions.FileSizeFilter.UseSizeFilter}" VerticalAlignment="Center" />
+                            <TextBlock Text="Include Files Larger than" VerticalAlignment="Center" />
+                            <NumericUpDown
+                                FormatString="N0"
+                                MaxWidth="250"
+                                Maximum="100000"
+                                MinWidth="120"
+                                Minimum="1"
+                                Value="{Binding ScanOptions.FileSizeFilter.SizeThreshold, TargetNullValue=1}" />
+                            <TextBlock Text="MB" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <CheckBox IsChecked="{Binding ScanOptions.DirectorySizeFilter.UseSizeFilter}" VerticalAlignment="Center" />
+                            <TextBlock Text="Include Folders Larger than" VerticalAlignment="Center" />
+                            <NumericUpDown
+                                FormatString="N0"
+                                MaxWidth="250"
+                                Maximum="100000"
+                                MinWidth="120"
+                                Minimum="1"
+                                Value="{Binding ScanOptions.DirectorySizeFilter.SizeThreshold, TargetNullValue=1}" />
+                            <TextBlock Text="MB" VerticalAlignment="Center" />
+                        </StackPanel>
                     </StackPanel>
                 </HeaderedContentControl>
 
                 <!--  Other Options  -->
-                <HeaderedContentControl Header="Other">
+                <HeaderedContentControl Classes="indented" Header="Other">
                     <StackPanel Spacing="6">
+                        <ToggleSwitch Content="Include files" IsChecked="{Binding ScanOptions.IncludeFiles}" />
                         <ToggleSwitch Content="Include empty folders" />
                         <ToggleSwitch Content="Find duplicate files (slow)" />
                     </StackPanel>

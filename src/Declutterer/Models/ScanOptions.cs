@@ -12,5 +12,11 @@ public partial class ScanOptions : ObservableObject
     private AgeFilter _ageFilter = new();
     
     [ObservableProperty]
-    private EntrySizeFilter _entrySizeFilter = new();
+    private EntrySizeFilter _fileSizeFilter = new();
+    
+    [ObservableProperty]
+    private EntrySizeFilter _directorySizeFilter = new();
+    
+    [ObservableProperty]
+    private bool _includeFiles = true;
 }

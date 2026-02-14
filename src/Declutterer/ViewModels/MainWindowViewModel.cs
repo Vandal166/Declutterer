@@ -69,6 +69,7 @@ public partial class MainWindowViewModel : ViewModelBase
         SelectedNodesSizeText = ByteConverter.ToReadableString(selectedNodesSize);
     }
 
+    // Loads subdirectories and files for a given node when it's expanded. This is called from the UI when a node is expanded.
     public async Task LoadChildrenForNodeAsync(TreeNode node)
     {
         if (node.Children.Count > 0)

@@ -27,6 +27,10 @@ public sealed partial class ScanOptionsWindowViewModel : ViewModelBase
         if (storageProvider == null)
             return;
 
+        //TODO guard against user picking an Disk or Network Drive
+        // Unhandled exception. System.InvalidOperationException: This operation is not supported for a relative URI.
+        //     at System.Uri.get_LocalPath()
+
         var folders = await storageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
             AllowMultiple = true,
