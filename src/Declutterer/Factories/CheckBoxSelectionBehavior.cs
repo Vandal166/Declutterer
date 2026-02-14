@@ -66,6 +66,11 @@ public static class CheckBoxSelectionBehavior
     /// <param name="node">The TreeNode to synchronize with</param>
     /// <param name="viewModel">The MainWindowViewModel for selection updates</param>
     /// <returns>An IDisposable that must be disposed to clean up event subscriptions and prevent memory leaks</returns>
+    /// <remarks>
+    /// IMPORTANT: The returned IDisposable MUST be disposed when the checkbox is no longer needed,
+    /// otherwise event handlers will remain subscribed and cause memory leaks. The checkbox's
+    /// IsCheckedChanged event will remain subscribed until Dispose() is called.
+    /// </remarks>
     public static IDisposable AttachToNode(CheckBox checkBox, TreeNode node, MainWindowViewModel viewModel)
     {
         return new CheckBoxAttachment(checkBox, node, viewModel);
