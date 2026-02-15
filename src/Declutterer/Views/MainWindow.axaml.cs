@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Controls;
 using Declutterer.Factories;
 using Declutterer.ViewModels;
@@ -19,6 +20,19 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel viewModel)
         {
             viewModel.SetTopLevel(this);
+        }
+        
+        // Clean up resources when window is closed
+        Closed += OnWindowClosed;
+    }
+
+    private void OnWindowClosed(object? sender, EventArgs e)
+    {
+        // Dispose of ViewModel to clean up event handlers and prevent memory leaks
+        // Note: TreeGridInteractionService is a singleton and shouldn't be disposed here
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.Dispose();
         }
     }
 

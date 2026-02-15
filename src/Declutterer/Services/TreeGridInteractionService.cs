@@ -20,7 +20,10 @@ public sealed class TreeGridInteractionService
     private bool IsExpandingAll { get; set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
     private double _lastPointerPressedTime = 0; // For detecting double-clicks on expanders
     
-    //TODO 2: analyze if there is an unsubcribtion needed
+    // NOTE: This service is a singleton with application lifetime. Event subscriptions here
+    // don't cause memory leaks since the service, TreeDataGrid, and ViewModel all live for
+    // the same duration. The critical memory leak prevention is handled in MainWindowViewModel.Dispose()
+    // where node subscriptions are properly cleaned up.
     public TreeGridInteractionService(MainWindowViewModel viewModel, IconLoadingService iconLoadingService)
     {
         _viewModel = viewModel;
