@@ -1,4 +1,3 @@
 <Solution>
-<!--  <Project Path="src/Declutterer.Benchmark/Declutterer.Benchmark.csproj" />-->
   <Project Path="src/Declutterer/Declutterer.csproj" />
 </Solution>

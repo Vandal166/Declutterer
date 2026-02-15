@@ -18,7 +18,7 @@ public sealed class ScanFilterService
     /// </summary>
     /// <param name="options"></param>
     /// <returns>A function that takes a TreeNode and returns true if it passes the filter criteria, false otherwise.</returns>
-    public Func<FileSystemInfo, bool>? CreateFilter(ScanOptions? options)
+    public Func<FileSystemInfoWrapper, bool>? CreateFilter(ScanOptions? options)
     {
         if(options is null)
             return null; // No filter if options are null

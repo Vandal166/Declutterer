@@ -17,8 +17,8 @@ public sealed class DirectoryScanService
     private readonly ScanFilterService _scanFilterService;
     private readonly ILogger<DirectoryScanService> _logger;
     
-    // caching sizes to avoid redundant recursive calculations, <fullPath, size>
-    private static readonly ConcurrentDictionary<string, long> _sizeCache = new();
+    // caching sizes to avoid redundant recursive calculations, <fullPath, size>, OrdinalIgnoreCase for path case-insensitivity on lookups
+    private static readonly ConcurrentDictionary<string, long> _sizeCache = new(StringComparer.OrdinalIgnoreCase);
     
     public DirectoryScanService(ScanFilterService scanFilterService, ILogger<DirectoryScanService> logger)
     {
@@ -61,7 +61,7 @@ public sealed class DirectoryScanService
         var children = new List<TreeNode>();
         
         _logger.LogInformation("Loading children for node: {NodePath}", node.FullPath);
-        //Small, bounded work (single directory)
+        //Small, bounded work (single directory) therefore no need to offload to background thread
         try
         {
             var filter = _scanFilterService.CreateFilter(scanOptions);
@@ -82,7 +82,7 @@ public sealed class DirectoryScanService
         return Task.FromResult(children);
     }
     
-    private void LoadSubdirectories(TreeNode parentNode, DirectoryInfo dirInfo, Func<FileSystemInfo, bool>? filter, List<TreeNode> children)
+    private void LoadSubdirectories(TreeNode parentNode, DirectoryInfo dirInfo, Func<FileSystemInfoWrapper, bool>? filter, List<TreeNode> children)
     {
         try
         {
@@ -95,29 +95,34 @@ public sealed class DirectoryScanService
                 ReturnSpecialDirectories = false
             };
             
+            // Enumerate subdirectories once and cache the result
+            var subdirectories = dirInfo.GetDirectories("*", enumerationOptions);
+            bool hasAnyEntries = subdirectories.Length > 0 || dirInfo.GetFiles("*", enumerationOptions).Length > 0;
+            
             // getting subdirectories in the current root directory we are in
-            foreach (var dir in dirInfo.GetDirectories("*", enumerationOptions)) 
+            foreach (var dir in subdirectories) 
             {
                 try
                 {
+                    var wrapper = new FileSystemInfoWrapper { Info = dir };
+                    
                     // Apply filter(filtering out nodes that dont match the criteria)
-                    if (filter != null && !filter(dir))
+                    if (filter != null && !filter(wrapper))
                         continue;
                     
-                    // Check if directory has any subdirectories or files but only if IncludeFiles is enabled
-                    bool hasSubDirs = dir.GetDirectories().Length > 0 || (dir.GetFiles().Length > 0 /*&& (_currentScanOptions?.IncludeFiles == true)*/); //TODO this will be added later, for now we dont include files
+                    // using cached size if available from the filter, otherwise calculate it
+                    long size = wrapper.CalculatedSize ?? CalculateDirectorySize(dir);
 
                     var childNode = new TreeNode
                     {
                         Name = dir.Name,
                         FullPath = dir.FullName,
                         IsDirectory = true,
-                        Size = CalculateDirectorySize(dir), //TODO: since the filter above already mighthave calculated the size if the filter includes a directory size filter, we could cache the size in the filter and reuse it here to avoid redundant re-calculations,
-                        // mby create an wrapper class that will hold the DirectoryInfo and the calculated size(nullable?)
+                        Size = size,
                         LastModified = dir.LastWriteTime,
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
-                        HasChildren = hasSubDirs,
+                        HasChildren = hasAnyEntries,
                         IsCheckboxSelected = parentNode.IsCheckboxSelected, // inherit selection state from parent
                         IsCheckboxEnabled = !parentNode.IsCheckboxSelected // if parent is selected then disable the checkbox for the child since we dont want to allow unselecting a child when parent is selected, this simplifies the logic and avoids edge cases with selection state
                     };
@@ -138,10 +143,8 @@ public sealed class DirectoryScanService
         _logger.LogInformation("Loaded {ChildrenCount} subdirectories for node: {NodePath}", children.Count, parentNode.FullPath);
     }
     
-    private void LoadFiles(TreeNode parentNode, DirectoryInfo dirInfo, Func<FileInfo, bool>? filter, List<TreeNode> children)
+    private void LoadFiles(TreeNode parentNode, DirectoryInfo dirInfo, Func<FileSystemInfoWrapper, bool>? filter, List<TreeNode> children)
     {
-        // Get files if IncludeFiles is enabled
-        //if (_currentScanOptions?.IncludeFiles == true) //TODO this will be added later, for now we dont include files
         try
         {
             var enumerationOptions = new EnumerationOptions
@@ -156,7 +159,9 @@ public sealed class DirectoryScanService
             {
                 try
                 {
-                    if (filter != null && !filter(file))
+                    var wrapper = new FileSystemInfoWrapper { Info = file, CalculatedSize = file.Length };
+                    
+                    if (filter != null && !filter(wrapper))
                         continue;
                     
                     var childNode = new TreeNode
@@ -191,7 +196,7 @@ public sealed class DirectoryScanService
     /// Parallelized approach for loading subdirectories from a single directory.
     /// Processes directory entries concurrently across CPU cores.
     /// </summary>
-    private void LoadSubdirectoriesParallel(TreeNode parentNode, DirectoryInfo dirInfo, Func<DirectoryInfo, bool>? filter, List<TreeNode> children)
+    private void LoadSubdirectoriesParallel(TreeNode parentNode, DirectoryInfo dirInfo, Func<FileSystemInfoWrapper, bool>? filter, List<TreeNode> children)
     {
         try
         {
@@ -203,28 +208,33 @@ public sealed class DirectoryScanService
                 AttributesToSkip = FileAttributes.System | FileAttributes.Hidden | FileAttributes.Temporary | FileAttributes.Offline | FileAttributes.Encrypted,
                 ReturnSpecialDirectories = false
             };
-            var directories = dirInfo.GetDirectories("*", enumerationOptions);
+            
+            // Enumerate directories once before parallel processing
+            DirectoryInfo[] directories = dirInfo.GetDirectories("*", enumerationOptions);
             var childNodes = new ConcurrentBag<TreeNode>();
             
             Parallel.ForEach(directories, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, dir =>
             {
                 try
                 {
-                    if (filter != null && !filter(dir))
-                        return;
+                    var wrapper = new FileSystemInfoWrapper { Info = dir };
                     
-                    bool hasSubDirs = dir.GetDirectories().Length > 0 || (dir.GetFiles().Length > 0);
+                    if (filter != null && !filter(wrapper))
+                        return;
+                   
+                    // using cached size if available from the filter, otherwise calculate it
+                    long size = wrapper.CalculatedSize ?? CalculateDirectorySize(dir);
 
                     var childNode = new TreeNode
                     {
                         Name = dir.Name,
                         FullPath = dir.FullName,
                         IsDirectory = true,
-                        Size = CalculateDirectorySize(dir), //TODO: same here regarding caching size calculations in the filter
+                        Size = size,
                         LastModified = dir.LastWriteTime,
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
-                        HasChildren = hasSubDirs,
+                        HasChildren = true, // assuming true to avoid extra I/O in parallel processing; will be verified on expansion
                         IsCheckboxSelected = parentNode.IsCheckboxSelected, // inherit selection state from parent
                         IsCheckboxEnabled = !parentNode.IsCheckboxSelected
                     };

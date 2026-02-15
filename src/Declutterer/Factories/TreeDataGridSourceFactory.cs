@@ -40,7 +40,7 @@ public static class TreeDataGridSourceFactory
                             HorizontalAlignment = HorizontalAlignment.Center,
                         };
                         
-                        CheckBoxSelectionBehavior.AttachToNode(checkBox, node, viewModel);
+                        using var __ = CheckBoxSelectionBehavior.AttachToNode(checkBox, node, viewModel);
                                 
                         return checkBox;
                     }, supportsRecycling: false), // Disable recycling to ensure each node has its own CheckBox

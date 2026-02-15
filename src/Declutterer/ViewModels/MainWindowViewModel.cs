@@ -6,7 +6,9 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Declutterer.Abstractions;
@@ -14,6 +16,7 @@ using Declutterer.Common;
 using Declutterer.Models;
 using Declutterer.Services;
 using Declutterer.Views;
+using Serilog;
 
 namespace Declutterer.ViewModels;
 
@@ -35,7 +38,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly SmartSelectionService _smartSelectionService;
     
     private readonly IDispatcher _dispatcher;
+    private readonly IExplorerLauncher _explorerLauncher;
     private readonly IconLoadingService _iconLoadingService;
+    private readonly IErrorDialogService _errorDialogService;
     
     private bool _isUpdatingSelection = false; // Guard against re-entrancy during recursive selection updates
 
@@ -50,12 +55,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly HashSet<TreeNode> _subscribedNodes = new();
     private readonly Dictionary<TreeNode, PropertyChangedEventHandler> _nodePropertyHandlers = new();
     
-    public MainWindowViewModel(DirectoryScanService directoryScanService, SmartSelectionService smartSelectionService, IDispatcher dispatcher, IconLoadingService iconLoadingService)
+    public MainWindowViewModel(DirectoryScanService directoryScanService, SmartSelectionService smartSelectionService, IDispatcher dispatcher, IconLoadingService iconLoadingService, IExplorerLauncher explorerLauncher, IErrorDialogService errorDialogService)
     {
         _directoryScanService = directoryScanService;
         _smartSelectionService = smartSelectionService;
         _dispatcher = dispatcher;
         _iconLoadingService = iconLoadingService;
+        _explorerLauncher = explorerLauncher;
+        _errorDialogService = errorDialogService;
 
         // selection change tracking
         SelectedNodes.CollectionChanged += OnSelectedNodesCollectionChanged;
@@ -121,7 +128,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         });
     }
 
-    public void SetTopLevel(TopLevel topLevel) => _topLevel = topLevel;
+    public void SetTopLevel(TopLevel topLevel)
+    {
+        _topLevel = topLevel;
+        if (topLevel is Window window)
+        {
+            _errorDialogService.SetOwnerWindow(window);
+        }
+    }
 
     [RelayCommand]
     private void ClearAll()
@@ -199,8 +213,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                     }
                     catch (UnauthorizedAccessException){/*skip*/}
                 }
-
-
+                
                 await LoadChildrenParallelAsync(validRoots);
             }
         }
@@ -275,7 +288,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             return; // preventing another subscription for the same node, example after collapsing/expanding which can trigger multiple PropertyChanged events for the same node
         
         // Create and store the handler so we can unsubscribe later
-        PropertyChangedEventHandler handler = (sender, args) =>
+        PropertyChangedEventHandler handler = (_, args) =>
         {
             if (args.PropertyName == nameof(TreeNode.IsCheckboxSelected))
             {
@@ -438,12 +451,46 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         return false;
     }
 
+    public async Task HandleNodeDoubleClick(TreeNode? node)
+    {
+        try
+        {
+            if (node == null)
+                return;
+            
+            _explorerLauncher.OpenInExplorer(node.FullPath);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to open node in explorer: {NodePath}", node?.FullPath);
+            await _errorDialogService.ShowErrorAsync(
+                "Failed to Open in Explorer",
+                $"Could not open the path in File Explorer:\n{node?.FullPath}",
+                e);
+        }
+    }
+    
+    private bool _disposed = false;
+    
     public void Dispose()
     {
-        // Unsubscribe from SelectedNodes collection changes
-        SelectedNodes.CollectionChanged -= OnSelectedNodesCollectionChanged;
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+    
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            // Unsubscribe from SelectedNodes collection changes
+            SelectedNodes.CollectionChanged -= OnSelectedNodesCollectionChanged;
         
-        // Unsubscribe from all node property changes
-        UnsubscribeFromAllNodes();
+            // Unsubscribe from all node property changes
+            UnsubscribeFromAllNodes();
+        }
+        _disposed = true;
     }
 }

@@ -1,4 +1,5 @@
 ﻿using Declutterer.Abstractions;
+using Declutterer.Launchers;
 using Declutterer.Services;
 using Declutterer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,5 +27,8 @@ public static class DependencyInjection
         
         collection.AddSingleton<SmartSelectionScorer>();
         collection.AddSingleton<SmartSelectionService>();
+        
+        collection.AddSingleton<IExplorerLauncher, WindowsExplorerLauncher>();
+        collection.AddSingleton<IErrorDialogService, ErrorDialogService>();
     }
 }

@@ -105,7 +105,7 @@ public sealed class TreeGridInteractionService
 
     private void InitializePointerPressedHandler(TreeDataGrid treeDataGrid)
     {
-        treeDataGrid.PointerPressed += async (sender, args) =>
+        treeDataGrid.PointerPressed += (sender, args) =>
         {
             if(IsExpandingAll)
                 return;
@@ -115,7 +115,8 @@ public sealed class TreeGridInteractionService
                 double currentTime = args.Timestamp;
                 if (currentTime - _lastPointerPressedTime < 300) // 300ms threshold for double-click
                 {
-                    //TODO let the vm handle and open in explroer on double click
+                    // Fire-and-forget the async operation; any errors are logged by the ViewModel
+                    _ = _viewModel.HandleNodeDoubleClick(GetNodeFromPointerEvent(treeDataGrid, args));
                     return;
                 }
                 _lastPointerPressedTime = currentTime;
@@ -234,5 +235,18 @@ public sealed class TreeGridInteractionService
         {
             node.IsExpanded = shouldExpand;
         }
+    }
+    
+    private static TreeNode? GetNodeFromPointerEvent(TreeDataGrid treeDataGrid, PointerPressedEventArgs args)
+    {
+        var point = args.GetCurrentPoint(treeDataGrid);
+        var visual = treeDataGrid.InputHitTest(point.Position) as Control;
+        while (visual != null)
+        {
+            if (visual.DataContext is TreeNode node)
+                return node;
+            visual = visual.Parent as Control;
+        }
+        return null;
     }
 }

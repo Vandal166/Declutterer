@@ -2,100 +2,76 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Declutterer.Models;
 
 namespace Declutterer.Services;
 
 public sealed class ScanFilterBuilder
 {
-    private readonly List<Func<FileSystemInfo, bool>> _dateCriteria = new();
-    private Func<FileSystemInfo, bool>? _fileSizeFilter;
-    private Func<FileSystemInfo, bool>? _directorySizeFilter;
-    private bool _includeFiles = true; // Track whether files should be included
+    // Func<which takes a FileSystemInfo and returns a bool whether it meets the criteria>
+    private readonly List<Func<FileSystemInfoWrapper, bool>> _criteria = new();
     
     public void Clear()
     {
-        _dateCriteria.Clear();
-        _fileSizeFilter = null;
-        _directorySizeFilter = null;
-        _includeFiles = true;
+        _criteria.Clear();
     }
     
     public ScanFilterBuilder WithModifiedDateFilter(DateTime modifiedBefore)
     {
-        _dateCriteria.Add(entry => entry.LastWriteTime < modifiedBefore);
+        _criteria.Add(entry => entry.Info.LastWriteTime < modifiedBefore);
         return this;
     }
     
     public ScanFilterBuilder WithAccessedDateFilter(DateTime accessedBefore)
     {
-        _dateCriteria.Add(entry => entry.LastAccessTime < accessedBefore);
+        _criteria.Add(entry => entry.Info.LastAccessTime < accessedBefore);
         return this;
     }
     
     public ScanFilterBuilder WithFileSizeFilter(long sizeThresholdInBytes)
     {
-        _fileSizeFilter = entry => entry is FileInfo fileInfo && fileInfo.Length > sizeThresholdInBytes;
+        // we are gonna add the FileSystemInfo if its a file and its size is greater than the threshold
+        _criteria.Add(entry => 
+            (entry.Info is FileInfo fileInfo && fileInfo.Length > sizeThresholdInBytes) 
+            || entry.Info is DirectoryInfo); // if its a directory, we include it regardless of the size filter, since the file size filter should NOT exclude directories
         return this;
     }
     
     public ScanFilterBuilder WithDirectorySizeFilter(long sizeThresholdInBytes)
     {
-        _directorySizeFilter = entry => entry is DirectoryInfo dirInfo && DirectoryScanService.CalculateDirectorySize(dirInfo) > sizeThresholdInBytes;
+        // we are gonna add the FileSystemInfo if its a directory and its size is greater than the threshold
+        _criteria.Add(entry =>
+        {
+            // Only process directories; files always pass through this filter
+            if (entry.Info is not DirectoryInfo dirInfo)
+                return entry.Info is FileInfo;
+            
+            // Calculate and cache size only if not already cached from filter pipeline
+            if (!entry.CalculatedSize.HasValue)
+            {
+                entry.CalculatedSize = DirectoryScanService.CalculateDirectorySize(dirInfo);
+            }
+            
+            return entry.CalculatedSize.Value > sizeThresholdInBytes;
+        });
         return this;
     }
     
     public ScanFilterBuilder WithIncludeFiles(bool includeFiles)
     {
-        _includeFiles = includeFiles;
+        if (!includeFiles)
+        {
+            // we are gonna add the FileSystemInfo if its a directory, since files are not included
+            _criteria.Add(entry => entry.Info is DirectoryInfo);
+        }
         return this;
     }
     
-    //TODO i dont like this at all, need to refactor ts. no one knows what the f is goin on here
-    
-    public Func<FileSystemInfo, bool> Build()
+    /// <summary>
+    /// Returns a function that takes a FileSystemInfo and returns true if it meets ALL the criteria defined in this builder, and false otherwise.
+    /// </summary>
+    public Func<FileSystemInfoWrapper, bool> Build()
     {
-        // If no criteria exist, accept everything (unless files are explicitly excluded)
-        if (_dateCriteria.Count == 0 && _fileSizeFilter == null && _directorySizeFilter == null)
-        {
-            if (!_includeFiles)
-            {
-                // Only accept directories
-                return entry => entry is DirectoryInfo;
-            }
-            return _ => true;
-        }
-        
-        // Combine date criteria using AND logic
-        bool CombineDate(FileSystemInfo entry) => _dateCriteria.All(criterion => criterion(entry));
-
-        // Combine size filters using OR logic (mutually exclusive - a file can't be a directory)
-        Func<FileSystemInfo, bool>? sizeFilter = null;
-        if (_fileSizeFilter != null && _directorySizeFilter != null)
-        {
-            sizeFilter = entry => _fileSizeFilter(entry) || _directorySizeFilter(entry);
-        }
-        else if (_fileSizeFilter != null)
-        {
-            sizeFilter = _fileSizeFilter;
-        }
-        else if (_directorySizeFilter != null)
-        {
-            sizeFilter = _directorySizeFilter;
-        }
-        
-        // Apply file inclusion filter
-        Func<FileSystemInfo, bool> fileInclusionFilter = !_includeFiles
-            ? entry => entry is DirectoryInfo
-            : _ => true;
-        
-        // Combine date filter, size filter, and file inclusion filter using AND logic
-        if (sizeFilter != null)
-        {
-            return entry => fileInclusionFilter(entry) && CombineDate(entry) && sizeFilter(entry);
-        }
-        else
-        {
-            return entry => fileInclusionFilter(entry) && CombineDate(entry);
-        }
+        return entry => _criteria.All(criterion => criterion(entry));
     }
 }

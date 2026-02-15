@@ -87,7 +87,6 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
             }
         }
         
-        //TODO display the largest first.
         
         // Add Large Directories group
         if (largeDirectories.Count > 0)
@@ -95,7 +94,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
             GroupedItems.Add(new ItemGroup
             {
                 GroupName = $"{largeDirectories.Count} Large Directories (>100MB)",
-                Items = new ObservableCollection<TreeNode>(largeDirectories)
+                Items = new ObservableCollection<TreeNode>(largeDirectories.OrderByDescending(d => d.Size))
             });
         }
         
@@ -105,7 +104,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
             GroupedItems.Add(new ItemGroup
             {
                 GroupName = $"{largeFiles.Count} Large Files (>100MB)",
-                Items = new ObservableCollection<TreeNode>(largeFiles)
+                Items = new ObservableCollection<TreeNode>(largeFiles.OrderByDescending(f => f.Size))
             });
         }
         
@@ -115,7 +114,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
             GroupedItems.Add(new ItemGroup
             {
                 GroupName = $"{oldFiles.Count} Old Files (Last Modified > 2 years ago)",
-                Items = new ObservableCollection<TreeNode>(oldFiles)
+                Items = new ObservableCollection<TreeNode>(oldFiles.OrderBy(f => f.LastModified)) // Oldest first
             });
         }
         
