@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Declutterer.Abstractions;
@@ -455,7 +456,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         try
         {
-            if (node == null)
+            if (node is null)
                 return;
             
             _explorerLauncher.OpenInExplorer(node.FullPath);
@@ -466,6 +467,42 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             await _errorDialogService.ShowErrorAsync(
                 "Failed to Open in Explorer",
                 $"Could not open the path in File Explorer:\n{node?.FullPath}",
+                e);
+        }
+    }
+
+    [RelayCommand]
+    private Task ContextMenuSelect(TreeNode? node)
+    {
+        node?.IsCheckboxSelected = !node.IsCheckboxSelected;
+        return Task.CompletedTask;
+    }
+
+    [RelayCommand]
+    private async Task ContextMenuOpenInExplorer(TreeNode? node)
+    {
+        await HandleNodeDoubleClick(node);
+    }
+
+    [RelayCommand]
+    private async Task ContextMenuCopyPath(TreeNode? node)
+    {
+        try
+        {
+            if (node is null)
+                return;
+
+            if (_topLevel?.Clipboard is IClipboard clipboard)
+            {
+                await clipboard.SetTextAsync(node.FullPath);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to copy path to clipboard: {NodePath}", node?.FullPath);
+            await _errorDialogService.ShowErrorAsync(
+                "Failed to Copy Path",
+                $"Could not copy the path to clipboard:\n{node?.FullPath}",
                 e);
         }
     }

@@ -31,7 +31,7 @@ public sealed class TreeGridInteractionService
     }
     
     /// <summary>
-    /// Initializes all necessary event handlers for the TreeDataGrid
+    /// Initializes all necessary event handlers for the TreeDataGrid. Invoked once during MainWindow initialization
     /// </summary>
     public void InitializeHandlers(TreeDataGrid treeDataGrid, HierarchicalTreeDataGridSource<TreeNode> source)
     {
@@ -46,6 +46,9 @@ public sealed class TreeGridInteractionService
         InitializePointerPressedHandler(treeDataGrid);
                 
         InitializePointerPressedEvent(treeDataGrid);
+        
+        // Initialize right-click context menu
+        InitializeContextMenuHandler(treeDataGrid);
     }
 
     private void InitializeIconHandler()
@@ -236,11 +239,64 @@ public sealed class TreeGridInteractionService
             node.IsExpanded = shouldExpand;
         }
     }
-    
-    private static TreeNode? GetNodeFromPointerEvent(TreeDataGrid treeDataGrid, PointerPressedEventArgs args)
+
+    private void InitializeContextMenuHandler(TreeDataGrid treeDataGrid)
     {
-        var point = args.GetCurrentPoint(treeDataGrid);
-        var visual = treeDataGrid.InputHitTest(point.Position) as Control;
+        // for tracking the current right-clicked node
+        TreeNode? currentContextNode = null;
+
+        var contextMenu = new ContextMenu
+        {
+            Padding = new Avalonia.Thickness(4),
+        };
+
+        var selectMenuItem = new MenuItem
+        {
+            Header = "Select",
+            Padding = new Avalonia.Thickness(8, 6),
+        };
+
+        var openMenuItem = new MenuItem
+        {
+            Header = "Open in Explorer",
+            Padding = new Avalonia.Thickness(8, 6),
+        };
+
+        var copyPathMenuItem = new MenuItem
+        {
+            Header = "Copy Path",
+            Padding = new Avalonia.Thickness(8, 6),
+        };
+
+        contextMenu.Items.Add(selectMenuItem);
+        contextMenu.Items.Add(openMenuItem);
+        contextMenu.Items.Add(copyPathMenuItem);
+
+        treeDataGrid.ContextRequested += (sender, args) =>
+        {
+            var clickedNode = GetNodeFromPointerEvent(treeDataGrid, args);
+            if (clickedNode != null)
+            {
+                currentContextNode = clickedNode;
+
+                // Update menu item commands and parameters with the current node
+                selectMenuItem.Command = _viewModel.ContextMenuSelectCommand;
+                selectMenuItem.CommandParameter = currentContextNode;
+
+                openMenuItem.Command = _viewModel.ContextMenuOpenInExplorerCommand;
+                openMenuItem.CommandParameter = currentContextNode;
+
+                copyPathMenuItem.Command = _viewModel.ContextMenuCopyPathCommand;
+                copyPathMenuItem.CommandParameter = currentContextNode;
+            }
+        };
+
+        treeDataGrid.ContextMenu = contextMenu;
+    }
+    
+    private static TreeNode? GetNodeFromPointer(TreeDataGrid treeDataGrid, Avalonia.Point point)
+    {
+        var visual = treeDataGrid.InputHitTest(point) as Control;
         while (visual != null)
         {
             if (visual.DataContext is TreeNode node)
@@ -248,5 +304,19 @@ public sealed class TreeGridInteractionService
             visual = visual.Parent as Control;
         }
         return null;
+    }
+    
+    private static TreeNode? GetNodeFromPointerEvent(TreeDataGrid treeDataGrid, PointerPressedEventArgs args)
+    {
+        var point = args.GetCurrentPoint(treeDataGrid).Position;
+        return GetNodeFromPointer(treeDataGrid, point);
+    }
+    
+    private static TreeNode? GetNodeFromPointerEvent(TreeDataGrid treeDataGrid, ContextRequestedEventArgs args)
+    {
+        if (!args.TryGetPosition(treeDataGrid, out var point))
+            return null;
+    
+        return GetNodeFromPointer(treeDataGrid, point);
     }
 }

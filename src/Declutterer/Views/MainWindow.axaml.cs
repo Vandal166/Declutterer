@@ -41,7 +41,6 @@ public partial class MainWindow : Window
     protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
     {
         base.OnLoaded(e);
-   //TODO 3: add a context menu to the rows with options like "Open in Explorer", "Copy Path", "Delete",
         if (DataContext is MainWindowViewModel viewModel)
         {
             // finding TreeDataGrid control and setting up the hierarchical data source for it
