@@ -45,14 +45,29 @@ public partial class MainWindow : Window
         {
             // finding TreeDataGrid control and setting up the hierarchical data source for it
             var treeDataGrid = this.FindControl<TreeDataGrid>("TreeDataGrid");
-            if (treeDataGrid != null)
-            {
-                var source = TreeDataGridSourceFactory.CreateTreeDataGridSource(viewModel, GetTopLevel(this)?.Bounds.Width);
-                
-                _interactionService.InitializeHandlers(treeDataGrid, source);
-                
-                treeDataGrid.Source = source; // assigning the source to the TreeDataGrid so that it can display the data
-            }
+            
+            ArgumentNullException.ThrowIfNull(treeDataGrid);
+            
+            var source = TreeDataGridSourceFactory.CreateTreeDataGridSource(viewModel, GetTopLevel(this)?.Bounds.Width);
+            
+            _interactionService.InitializeHandlers(treeDataGrid, source); // TreeDataGrid specific interactions
+            
+            // Init Shared interactions
+            var controlInteractionService = new ControlInteractionService();
+
+            controlInteractionService.InitializePointerDoublePressedHandler(
+                treeDataGrid,
+                node =>
+                {
+                    // Fire-and-forget the async operation; any errors are logged by the ViewModel
+                    _ = viewModel.ContextMenuOpenInExplorerCommand.ExecuteAsync(node);
+                },
+                () =>  viewModel.IsExpandingAll);
+            
+            // Initialize right-click context menu
+            controlInteractionService.InitializeContextMenuHandler(treeDataGrid, viewModel);
+            
+            treeDataGrid.Source = source; // assigning the source to the TreeDataGrid so that it can display the data
         }
     }
 }

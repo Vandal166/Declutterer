@@ -13,7 +13,7 @@ public static class DependencyInjection
     {
         collection.AddSingleton<MainWindowViewModel>();
         collection.AddSingleton<ScanOptionsWindowViewModel>();
-        collection.AddSingleton<CleanupWindowViewModel>();
+        collection.AddTransient<CleanupWindowViewModel>(); // Transient since each CleanupWindow gets a new instance with different selected nodes
         
         collection.AddLogging(builder => builder.AddSerilog());
         
@@ -22,7 +22,10 @@ public static class DependencyInjection
         collection.AddSingleton<DirectoryScanService>();
         collection.AddSingleton<IIconLoader, IconLoaderService>();
         collection.AddSingleton<IconLoadingService>();
+        
         collection.AddSingleton<TreeGridInteractionService>();
+        collection.AddTransient<ControlInteractionService>();
+     
         collection.AddSingleton<IDispatcher, AvaloniaDispatcher>(); 
         
         collection.AddSingleton<SmartSelectionScorer>();

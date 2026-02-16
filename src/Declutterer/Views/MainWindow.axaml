@@ -369,6 +369,19 @@
                     FontSize="13"
                     Grid.Column="2"
                     HorizontalAlignment="Left"
+                    IsVisible="{Binding SelectedNodes.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
+                    Margin="0,0,8,0"
+                    Padding="16,8" />
+
+                <!--  Select All Button  -->
+                <Button
+                    Background="White"
+                    Command="{Binding SelectAllCommand}"
+                    Content="Select All"
+                    FontSize="13"
+                    Grid.Column="2"
+                    HorizontalAlignment="Left"
+                    IsVisible="{Binding SelectedNodes.Count, Converter={StaticResource EqualToZeroToBooleanConverter}}"
                     Margin="0,0,8,0"
                     Padding="16,8" />
 

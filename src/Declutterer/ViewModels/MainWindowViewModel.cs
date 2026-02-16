@@ -23,7 +23,7 @@ namespace Declutterer.ViewModels;
 
 //TODO: add exclusions for Directories so they won't be scanned at all, not even shown in the tree, Persist the exclusions in some form of settings like json file
 
-public partial class MainWindowViewModel : ViewModelBase, IDisposable
+public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextMenuProvider
 {
     // ObservableProperty is used to generate the property with INotifyPropertyChanged implementation which will notify the UI when the property changes
     [ObservableProperty]
@@ -35,6 +35,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private string _selectedNodesSizeText = string.Empty; // a user-friendly string representation of the total size of the currently selected nodes
     
+    public bool IsExpandingAll { get; set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
+
     private readonly DirectoryScanService _directoryScanService;
     private readonly SmartSelectionService _smartSelectionService;
     
@@ -145,6 +147,16 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         SelectedNodes.Clear();
         _currentScanOptions = null;
         NoChildrenFound = false;
+    }
+    
+    [RelayCommand]
+    private void SelectAll()
+    {        
+        var rootChildrenToSelect = Roots.SelectMany(r => r.Children);
+        foreach (var child in rootChildrenToSelect)
+        {
+            child.IsCheckboxSelected = true;
+        }
     }
 
     [RelayCommand]
@@ -275,7 +287,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         var cleanupWindow = new CleanupWindow
         {
-            DataContext = new CleanupWindowViewModel(SelectedNodes.ToList()) // passing the selected nodes to the CleanupWindowViewModel so it can display them and perform cleanup actions
+            DataContext = new CleanupWindowViewModel(SelectedNodes, _explorerLauncher, _errorDialogService) // passing the selected nodes and dependencies to the CleanupWindowViewModel so it can display them and perform cleanup actions
         };
         
         if (_topLevel is Window window)
@@ -452,7 +464,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         return false;
     }
 
-    public async Task HandleNodeDoubleClick(TreeNode? node)
+    [RelayCommand]
+    private Task ContextMenuSelect(TreeNode? node)
+    {
+        node?.IsCheckboxSelected = !node.IsCheckboxSelected;
+        return Task.CompletedTask;
+    }
+
+    [RelayCommand]
+    private async Task ContextMenuOpenInExplorer(TreeNode? node)
     {
         try
         {
@@ -469,19 +489,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 $"Could not open the path in File Explorer:\n{node?.FullPath}",
                 e);
         }
-    }
-
-    [RelayCommand]
-    private Task ContextMenuSelect(TreeNode? node)
-    {
-        node?.IsCheckboxSelected = !node.IsCheckboxSelected;
-        return Task.CompletedTask;
-    }
-
-    [RelayCommand]
-    private async Task ContextMenuOpenInExplorer(TreeNode? node)
-    {
-        await HandleNodeDoubleClick(node);
     }
 
     [RelayCommand]

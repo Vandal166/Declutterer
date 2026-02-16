@@ -1,49 +1,80 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Declutterer.Abstractions;
 using Declutterer.Common;
 using Declutterer.Models;
+using Serilog;
 
 namespace Declutterer.ViewModels;
 
-public sealed partial class CleanupWindowViewModel : ViewModelBase
+public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenuProvider
 {
     private const long LargeFileSizeThresholdBytes = 100 * 1024 * 1024; // 100 MB
     private static readonly TimeSpan OldFileThreshold = TimeSpan.FromDays(365 * 2); // 2 years
     
-    public List<TreeNode> ItemsToDelete { get; } = new();
+    private readonly IExplorerLauncher _explorerLauncher;
+    private readonly IErrorDialogService _errorDialogService;
     
     [ObservableProperty]
-    private ObservableCollection<ItemGroup> groupedItems = new();
+    private ObservableCollection<TreeNode> _itemsToDelete = new();
     
     [ObservableProperty]
-    private bool sendToRecycleBin = true; // Default to safer option
+    private ObservableCollection<ItemGroup> _groupedItems = new();
     
     [ObservableProperty]
-    private string totalSizeFormatted = "0 B";
+    private bool _sendToRecycleBin = true; // Default to safer option
     
     [ObservableProperty]
-    private bool isDeletionInProgress = false;
+    private string _totalSizeFormatted = "0 B";
     
     [ObservableProperty]
-    private double deletionProgress = 0; // 0 to 100
+    [NotifyPropertyChangedFor(nameof(CanDelete))]
+    private bool _isDeletionInProgress = false;
     
     [ObservableProperty]
-    private string deletionStatus = string.Empty;
+    private double _deletionProgress = 0; // 0 to 100
+    
+    [ObservableProperty]
+    private string _deletionStatus = string.Empty;
+    
+    [ObservableProperty]
+    private TreeNode? _selectedItem = null;
     
     private TopLevel? _topLevel; // Reference to the TopLevel window for folder picker
     
-    public CleanupWindowViewModel(List<TreeNode> itemsToDelete)
+    [ObservableProperty]
+    private bool _canDelete;
+    
+    public CleanupWindowViewModel(ObservableCollection<TreeNode> itemsToDelete, IExplorerLauncher explorerLauncher, IErrorDialogService errorDialogService)
     {
+        _explorerLauncher = explorerLauncher;
+        _errorDialogService = errorDialogService;
+        
+        ItemsToDelete.CollectionChanged += ItemsToDeleteOnCollectionChanged;
+        
         ItemsToDelete.Clear();
-        ItemsToDelete.AddRange(itemsToDelete);
+        foreach (var item in itemsToDelete)
+        {
+            ItemsToDelete.Add(item);
+        }
+        
         CalculateTotalSize();
         BuildGroupedItems();
     }
-       
+
+    private void ItemsToDeleteOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        CanDelete = ItemsToDelete.Count > 0;
+    }
+
     public CleanupWindowViewModel() {} // for designer
     
     private void CalculateTotalSize()
@@ -57,6 +88,9 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
     private void BuildGroupedItems()
     {
         GroupedItems.Clear();
+        
+        if(ItemsToDelete.Count == 0)
+            return; //TODO show "No items to delete" message instead of empty groups
         
         // Filter to only top-level items (exclude items nested within other items)
         // This prevents double-counting sizes when both a parent and child directory are selected
@@ -133,4 +167,78 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase
     }
     
     public void SetTopLevel(TopLevel topLevel) => _topLevel = topLevel;
+    
+    [RelayCommand]
+    private void RemoveFromCleanup(TreeNode? item)
+    {
+        if (item is null) 
+            return;
+        
+        // Remove the item from _itemsToDelete
+        ItemsToDelete.Remove(item);
+      
+        // Recalculate total size
+        CalculateTotalSize();
+        
+        BuildGroupedItems();
+        
+        // Clear selection
+        SelectedItem = null;
+    }
+
+     [RelayCommand]
+     private Task ContextMenuSelect(TreeNode? node)
+     {
+         // For cleanup window, "select" means removing from cleanup or marking differently
+         // For now, we'll just toggle it or you can adapt this as needed
+         if (node is not null)
+         {
+             RemoveFromCleanup(node);
+         }
+         return Task.CompletedTask;
+     }
+
+     [RelayCommand]
+     private Task ContextMenuOpenInExplorer(TreeNode? node)
+     {
+         try
+         {
+             if (node is null)
+                 return Task.CompletedTask;
+
+             _explorerLauncher.OpenInExplorer(node.FullPath);
+         }
+         catch (Exception e)
+         {
+             Log.Error(e, "Failed to open node in explorer: {NodePath}", node?.FullPath);
+             _ = _errorDialogService.ShowErrorAsync(
+                 "Failed to Open in Explorer",
+                 $"Could not open the path in File Explorer:\n{node?.FullPath}",
+                 e);
+         }
+         return Task.CompletedTask;
+     }
+
+     [RelayCommand]
+     private async Task ContextMenuCopyPath(TreeNode? node)
+     {
+         try
+         {
+             if (node is null)
+                 return;
+
+             if (_topLevel?.Clipboard is IClipboard clipboard)
+             {
+                 await clipboard.SetTextAsync(node.FullPath);
+             }
+         }
+         catch (Exception e)
+         {
+             Log.Error(e, "Failed to copy path to clipboard: {NodePath}", node?.FullPath);
+             await _errorDialogService.ShowErrorAsync(
+                 "Failed to Copy Path",
+                 $"Could not copy the path to clipboard:\n{node?.FullPath}",
+                 e);
+         }
+     }
 }

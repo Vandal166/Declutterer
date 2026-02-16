@@ -17,9 +17,6 @@ public sealed class TreeGridInteractionService
     private readonly MainWindowViewModel _viewModel;
     private readonly IconLoadingService _iconLoadingService;
     
-    private bool IsExpandingAll { get; set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
-    private double _lastPointerPressedTime = 0; // For detecting double-clicks on expanders
-    
     // NOTE: This service is a singleton with application lifetime. Event subscriptions here
     // don't cause memory leaks since the service, TreeDataGrid, and ViewModel all live for
     // the same duration. The critical memory leak prevention is handled in MainWindowViewModel.Dispose()
@@ -31,7 +28,7 @@ public sealed class TreeGridInteractionService
     }
     
     /// <summary>
-    /// Initializes all necessary event handlers for the TreeDataGrid. Invoked once during MainWindow initialization
+    /// Initializes all necessary event handlers for an TreeDataGrid. Invoked once during MainWindow initialization
     /// </summary>
     public void InitializeHandlers(TreeDataGrid treeDataGrid, HierarchicalTreeDataGridSource<TreeNode> source)
     {
@@ -41,14 +38,10 @@ public sealed class TreeGridInteractionService
         InitializeIconHandler();
 
         InitializeRowCollapsingHandler(source);
-        
-        // Handle pointer events to detect Alt+Click on expander
-        InitializePointerPressedHandler(treeDataGrid);
                 
+        // Handle pointer events to detect Alt+Click on expander
         InitializePointerPressedEvent(treeDataGrid);
         
-        // Initialize right-click context menu
-        InitializeContextMenuHandler(treeDataGrid);
     }
 
     private void InitializeIconHandler()
@@ -106,32 +99,11 @@ public sealed class TreeGridInteractionService
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
     }
 
-    private void InitializePointerPressedHandler(TreeDataGrid treeDataGrid)
-    {
-        treeDataGrid.PointerPressed += (sender, args) =>
-        {
-            if(IsExpandingAll)
-                return;
-            
-            if(args.GetCurrentPoint(treeDataGrid).Properties.IsLeftButtonPressed)
-            {
-                double currentTime = args.Timestamp;
-                if (currentTime - _lastPointerPressedTime < 300) // 300ms threshold for double-click
-                {
-                    // Fire-and-forget the async operation; any errors are logged by the ViewModel
-                    _ = _viewModel.HandleNodeDoubleClick(GetNodeFromPointerEvent(treeDataGrid, args));
-                    return;
-                }
-                _lastPointerPressedTime = currentTime;
-            }
-        };
-    }
-
     private void InitializeRowCollapsingHandler(HierarchicalTreeDataGridSource<TreeNode> source)
     {
         source.RowCollapsing += (_, args) =>
         {
-            if(IsExpandingAll)
+            if( _viewModel.IsExpandingAll)
                 return;
             
             if (args.Row.Model is TreeNode node) // setting IsExpanded to false on collapse for the node
@@ -145,7 +117,7 @@ public sealed class TreeGridInteractionService
     {
         source.RowExpanding += async (sender, args) =>
         {
-            if(IsExpandingAll) 
+            if( _viewModel.IsExpandingAll) 
                 return; // Skip if we're already in the middle of an expand/collapse all operation triggered by Alt+Click
             
             if (args.Row.Model is { IsDirectory: true, HasChildren: true} node)
@@ -175,13 +147,14 @@ public sealed class TreeGridInteractionService
         };
     }
 
+    //TODO should these two belong in here or in the ViewModel? They are more about the logic of toggling nodes than about handling interactions
     private async Task HandleAltClickExpandAsync(TreeNode node, bool shouldExpand)
     {
         var sw = new Stopwatch();
         sw.Start();
         try
         {
-            IsExpandingAll = true;
+            _viewModel.IsExpandingAll = true;
             // Pass isRoot=true so we skip setting IsExpanded on the clicked root node (the TreeDataGrid handles the root node's toggle via normal click processing)
             await ToggleAllDescendantsAsync(node, shouldExpand, isRoot: true);
         }
@@ -191,7 +164,7 @@ public sealed class TreeGridInteractionService
         }
         finally
         {
-            IsExpandingAll = false;
+            _viewModel.IsExpandingAll = false;
             sw.Stop();
             Log.Information("Completed Alt+Click expand/collapse for node '{NodeName}' in {ElapsedMilliseconds} ms", node.Name, sw.ElapsedMilliseconds);
         }
@@ -238,85 +211,5 @@ public sealed class TreeGridInteractionService
         {
             node.IsExpanded = shouldExpand;
         }
-    }
-
-    private void InitializeContextMenuHandler(TreeDataGrid treeDataGrid)
-    {
-        // for tracking the current right-clicked node
-        TreeNode? currentContextNode = null;
-
-        var contextMenu = new ContextMenu
-        {
-            Padding = new Avalonia.Thickness(4),
-        };
-
-        var selectMenuItem = new MenuItem
-        {
-            Header = "Select",
-            Padding = new Avalonia.Thickness(8, 6),
-        };
-
-        var openMenuItem = new MenuItem
-        {
-            Header = "Open in Explorer",
-            Padding = new Avalonia.Thickness(8, 6),
-        };
-
-        var copyPathMenuItem = new MenuItem
-        {
-            Header = "Copy Path",
-            Padding = new Avalonia.Thickness(8, 6),
-        };
-
-        contextMenu.Items.Add(selectMenuItem);
-        contextMenu.Items.Add(openMenuItem);
-        contextMenu.Items.Add(copyPathMenuItem);
-
-        treeDataGrid.ContextRequested += (sender, args) =>
-        {
-            var clickedNode = GetNodeFromPointerEvent(treeDataGrid, args);
-            if (clickedNode != null)
-            {
-                currentContextNode = clickedNode;
-
-                // Update menu item commands and parameters with the current node
-                selectMenuItem.Command = _viewModel.ContextMenuSelectCommand;
-                selectMenuItem.CommandParameter = currentContextNode;
-
-                openMenuItem.Command = _viewModel.ContextMenuOpenInExplorerCommand;
-                openMenuItem.CommandParameter = currentContextNode;
-
-                copyPathMenuItem.Command = _viewModel.ContextMenuCopyPathCommand;
-                copyPathMenuItem.CommandParameter = currentContextNode;
-            }
-        };
-
-        treeDataGrid.ContextMenu = contextMenu;
-    }
-    
-    private static TreeNode? GetNodeFromPointer(TreeDataGrid treeDataGrid, Avalonia.Point point)
-    {
-        var visual = treeDataGrid.InputHitTest(point) as Control;
-        while (visual != null)
-        {
-            if (visual.DataContext is TreeNode node)
-                return node;
-            visual = visual.Parent as Control;
-        }
-        return null;
-    }
-    
-    private static TreeNode? GetNodeFromPointerEvent(TreeDataGrid treeDataGrid, PointerPressedEventArgs args)
-    {
-        var point = args.GetCurrentPoint(treeDataGrid).Position;
-        return GetNodeFromPointer(treeDataGrid, point);
-    }
-    
-    private static TreeNode? GetNodeFromPointerEvent(TreeDataGrid treeDataGrid, ContextRequestedEventArgs args)
-    {
-        if (!args.TryGetPosition(treeDataGrid, out var point))
-            return null;
-    
-        return GetNodeFromPointer(treeDataGrid, point);
     }
 }

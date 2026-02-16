@@ -61,68 +61,121 @@
         </Grid>
 
         <!--  Grouped List of items (Scrollable)  -->
-        <ScrollViewer
-            Grid.Row="2"
-            Margin="10"
-            VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding GroupedItems}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border
-                            Background="#F5F5F5"
-                            BorderBrush="#CCCCCC"
-                            BorderThickness="1"
-                            CornerRadius="4"
-                            Margin="0,0,0,10"
-                            Padding="10">
-                            <StackPanel Orientation="Vertical" Spacing="8">
-                                <!--  Group Header  -->
-                                <TextBlock
-                                    FontSize="13"
-                                    FontWeight="SemiBold"
-                                    Foreground="#1E3A8A"
-                                    Text="{Binding GroupName}" />
-                                <TextBlock
-                                    FontSize="11"
-                                    Foreground="#666666"
-                                    Text="{Binding GroupSizeFormatted, StringFormat='Total: {0}'}" />
+        <Grid Grid.Row="2">
+            <ScrollViewer
+                IsVisible="{Binding ItemsToDelete.Count, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}"
+                Margin="10"
+                VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding GroupedItems}" x:Name="GroupedItemsControl">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border
+                                Background="#F5F5F5"
+                                BorderBrush="#CCCCCC"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Margin="0,0,0,10"
+                                Padding="10">
+                                <StackPanel Orientation="Vertical" Spacing="8">
+                                    <!--  Group Header  -->
+                                    <TextBlock
+                                        FontSize="13"
+                                        FontWeight="SemiBold"
+                                        Foreground="#1E3A8A"
+                                        Text="{Binding GroupName}" />
+                                    <TextBlock
+                                        FontSize="11"
+                                        Foreground="#666666"
+                                        Text="{Binding GroupSizeFormatted, StringFormat='Total: {0}'}" />
 
-                                <!--  Items in group  -->
-                                <ItemsControl ItemsSource="{Binding Items}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid ColumnDefinitions="Auto,*" Margin="5,5,0,5">
-                                                <!--  Icon based on file/folder type  -->
-                                                <Image
-                                                    Grid.Column="0"
-                                                    Height="28"
-                                                    Margin="0,0,10,0"
-                                                    Source="{Binding Icon}" />
-                                                <!--  Item details  -->
-                                                <StackPanel
-                                                    Grid.Column="1"
-                                                    Orientation="Vertical"
-                                                    VerticalAlignment="Center">
-                                                    <TextBlock FontWeight="Bold" Text="{Binding Name}" />
-                                                    <TextBlock
-                                                        FontSize="11"
-                                                        Foreground="Gray"
-                                                        Text="{Binding FullPath, Converter={StaticResource PathMiddleEllipsisConverter}, ConverterParameter=140}" />
-                                                    <TextBlock
-                                                        FontSize="10"
-                                                        Foreground="Gray"
-                                                        Text="{Binding SizeFormatted}" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+                                    <!--  Items in group  -->
+                                    <ListBox
+                                        ItemsSource="{Binding Items}"
+                                        SelectedItem="{Binding $parent[Window].DataContext.SelectedItem}"
+                                        x:Name="ListBoxItemsControl">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border BorderThickness="0" Margin="5,5,0,5">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                                        <!--  Icon based on file/folder type  -->
+                                                        <Image
+                                                            Grid.Column="0"
+                                                            Height="28"
+                                                            Margin="0,0,10,0"
+                                                            Source="{Binding Icon}" />
+                                                        <!--  Item details  -->
+                                                        <StackPanel
+                                                            Grid.Column="1"
+                                                            Orientation="Vertical"
+                                                            VerticalAlignment="Center">
+                                                            <TextBlock FontWeight="Bold" Text="{Binding Name}" />
+                                                            <TextBlock
+                                                                FontSize="11"
+                                                                Foreground="Gray"
+                                                                Text="{Binding FullPath, Converter={StaticResource PathMiddleEllipsisConverter}, ConverterParameter=140}" />
+                                                            <TextBlock
+                                                                FontSize="10"
+                                                                Foreground="Gray"
+                                                                Text="{Binding SizeFormatted}" />
+                                                        </StackPanel>
+                                                        <!--  Remove button  -->
+                                                        <Button
+                                                            Background="Transparent"
+                                                            BorderThickness="0"
+                                                            Command="{Binding $parent[Window].DataContext.RemoveFromCleanupCommand}"
+                                                            CommandParameter="{Binding .}"
+                                                            Content="-"
+                                                            FontSize="22"
+                                                            FontWeight="Bold"
+                                                            Foreground="#DC143C"
+                                                            Grid.Column="2"
+                                                            Margin="10,0,0,0"
+                                                            ToolTip.Tip="Remove from cleanup" />
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!--  No Items to Delete Message  -->
+            <StackPanel
+                HorizontalAlignment="Center"
+                IsVisible="{Binding ItemsToDelete.Count, Converter={StaticResource EqualToZeroToBooleanConverter}}"
+                Orientation="Vertical"
+                Spacing="16"
+                VerticalAlignment="Center">
+
+                <!--  Icon  -->
+                <Path
+                    Data="{StaticResource folder_regular}"
+                    Fill="#FFA500"
+                    Stretch="Uniform"
+                    VerticalAlignment="Center"
+                    Width="64" />
+
+                <!--  Main Heading  -->
+                <TextBlock
+                    FontSize="24"
+                    FontWeight="SemiBold"
+                    Foreground="#333333"
+                    HorizontalAlignment="Center"
+                    Text="No items to delete" />
+
+                <!--  Subtitle  -->
+                <TextBlock
+                    FontSize="13"
+                    Foreground="#666666"
+                    HorizontalAlignment="Center"
+                    Text="All selected items have been removed from the cleanup list."
+                    TextAlignment="Center" />
+            </StackPanel>
+        </Grid>
 
         <!--  Safety Toggle and Footer with buttons  -->
         <Border
@@ -226,7 +279,7 @@
                 Foreground="White"
                 Grid.Column="2"
                 HorizontalAlignment="Right"
-                IsEnabled="{Binding !IsDeletionInProgress}"
+                IsEnabled="{Binding CanDelete}"
                 Padding="20,10" />
         </Grid>
     </Grid>
