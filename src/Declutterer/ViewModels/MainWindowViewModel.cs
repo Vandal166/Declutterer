@@ -6,9 +6,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Input.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -23,6 +21,7 @@ namespace Declutterer.ViewModels;
 
 //TODO: add exclusions for Directories so they won't be scanned at all, not even shown in the tree, Persist the exclusions in some form of settings like json file
 
+//TODO 2: disable action buttons when no nodes are selected or when an scan is in progress
 public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextMenuProvider
 {
     // ObservableProperty is used to generate the property with INotifyPropertyChanged implementation which will notify the UI when the property changes
@@ -36,7 +35,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     private string _selectedNodesSizeText = string.Empty; // a user-friendly string representation of the total size of the currently selected nodes
     
     public bool IsExpandingAll { get; set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
-
+    
     private readonly DirectoryScanService _directoryScanService;
     private readonly SmartSelectionService _smartSelectionService;
     
@@ -295,32 +294,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
             await cleanupWindow.ShowDialog(window);
         }
     }
-    public void SubscribeToNodeSelectionChanges(TreeNode node)
-    {
-        if (!_subscribedNodes.Add(node))
-            return; // preventing another subscription for the same node, example after collapsing/expanding which can trigger multiple PropertyChanged events for the same node
-        
-        // Create and store the handler so we can unsubscribe later
-        PropertyChangedEventHandler handler = (_, args) =>
-        {
-            if (args.PropertyName == nameof(TreeNode.IsCheckboxSelected))
-            {
-                OnTreeNodeSelectionChanged(node);
-            }
-        };
-        
-        _nodePropertyHandlers[node] = handler;
-        node.PropertyChanged += handler;
-    }
     
-    private void UnsubscribeFromAllNodes()
-    {
-        foreach (var kvp in _nodePropertyHandlers)
-        {
-            kvp.Key.PropertyChanged -= kvp.Value;
-        }
-        _nodePropertyHandlers.Clear();
-    }
     /// <summary>
     /// Called whenever a TreeNode's IsSelected property changes.
     /// </summary>
@@ -512,6 +486,33 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
                 $"Could not copy the path to clipboard:\n{node?.FullPath}",
                 e);
         }
+    }
+    
+    public void SubscribeToNodeSelectionChanges(TreeNode node)
+    {
+        if (!_subscribedNodes.Add(node))
+            return; // preventing another subscription for the same node, example after collapsing/expanding which can trigger multiple PropertyChanged events for the same node
+        
+        // Create and store the handler so we can unsubscribe later
+        PropertyChangedEventHandler handler = (_, args) =>
+        {
+            if (args.PropertyName == nameof(TreeNode.IsCheckboxSelected))
+            {
+                OnTreeNodeSelectionChanged(node);
+            }
+        };
+        
+        _nodePropertyHandlers[node] = handler;
+        node.PropertyChanged += handler;
+    }
+    
+    private void UnsubscribeFromAllNodes()
+    {
+        foreach (var kvp in _nodePropertyHandlers)
+        {
+            kvp.Key.PropertyChanged -= kvp.Value;
+        }
+        _nodePropertyHandlers.Clear();
     }
     
     private bool _disposed = false;

@@ -16,6 +16,7 @@ public sealed class TreeGridInteractionService
 {
     private readonly MainWindowViewModel _viewModel;
     private readonly IconLoadingService _iconLoadingService;
+    private double _lastPointerPressedTime = 0; // For detecting double-clicks
     
     // NOTE: This service is a singleton with application lifetime. Event subscriptions here
     // don't cause memory leaks since the service, TreeDataGrid, and ViewModel all live for
@@ -42,6 +43,32 @@ public sealed class TreeGridInteractionService
         // Handle pointer events to detect Alt+Click on expander
         InitializePointerPressedEvent(treeDataGrid);
         
+    }
+    
+    /// <summary>
+    /// Initializes a pointer double-pressed handler on the given control. When a double-click is detected, it resolves the TreeNode under the pointer and invokes the provided callback.
+    /// </summary>
+    /// <param name="control">The control to attach the handler to</param>
+    /// <param name="onNodeDoubleClick">Callback to invoke with the TreeNode that was double-clicked (or null if no node)</param>
+    /// <param name="onBeforeActionCondition">Optional callback to check a condition before processing the double-click. If it evaluates to true the double-click action will be skipped.</param>
+    public void InitializePointerDoublePressedHandler(Control control, Action<TreeNode?> onNodeDoubleClick, Func<bool>? onBeforeActionCondition = null)
+    {
+        control.PointerPressed += (_, args) =>
+        {
+            if(onBeforeActionCondition != null && onBeforeActionCondition())
+                return;
+            
+            if(args.GetCurrentPoint(control).Properties.IsLeftButtonPressed)
+            {
+                double currentTime = args.Timestamp;
+                if (currentTime - _lastPointerPressedTime < 300) // 300ms threshold for double-click
+                {
+                    onNodeDoubleClick(GetNodeFromPointerEvent(control, args));
+                    return;
+                }
+                _lastPointerPressedTime = currentTime;
+            }
+        };
     }
 
     private void InitializeIconHandler()
@@ -211,5 +238,22 @@ public sealed class TreeGridInteractionService
         {
             node.IsExpanded = shouldExpand;
         }
+    }
+    
+    private static TreeNode? GetNodeFromPointer(Control Control, Avalonia.Point point)
+    {
+        var visual = Control.InputHitTest(point) as Control;
+        while (visual != null)
+        {
+            if (visual.DataContext is TreeNode node)
+                return node;
+            visual = visual.Parent as Control;
+        }
+        return null;
+    }
+    private static TreeNode? GetNodeFromPointerEvent(Control control, PointerPressedEventArgs args)
+    {
+        var point = args.GetCurrentPoint(control).Position;
+        return GetNodeFromPointer(control, point);
     }
 }

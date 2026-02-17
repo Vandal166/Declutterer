@@ -52,10 +52,7 @@ public partial class MainWindow : Window
             
             _interactionService.InitializeHandlers(treeDataGrid, source); // TreeDataGrid specific interactions
             
-            // Init Shared interactions
-            var controlInteractionService = new ControlInteractionService();
-
-            controlInteractionService.InitializePointerDoublePressedHandler(
+            _interactionService.InitializePointerDoublePressedHandler(
                 treeDataGrid,
                 node =>
                 {
@@ -64,6 +61,8 @@ public partial class MainWindow : Window
                 },
                 () =>  viewModel.IsExpandingAll);
             
+            // Init Shared interactions
+            var controlInteractionService = new ControlInteractionService();
             // Initialize right-click context menu
             controlInteractionService.InitializeContextMenuHandler(treeDataGrid, viewModel);
             

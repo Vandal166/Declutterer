@@ -198,7 +198,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
     }
 
      [RelayCommand]
-     private Task ContextMenuSelect(TreeNode? node)
+     private async Task ContextMenuSelect(TreeNode? node)
      {
          // For cleanup window, "select" means removing from cleanup or marking differently
          // For now, we'll just toggle it or you can adapt this as needed
@@ -206,28 +206,27 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
          {
              RemoveFromCleanup(node);
          }
-         return Task.CompletedTask;
+         await Task.CompletedTask;
      }
 
      [RelayCommand]
-     private Task ContextMenuOpenInExplorer(TreeNode? node)
+     private async Task ContextMenuOpenInExplorer(TreeNode? node)
      {
          try
          {
              if (node is null)
-                 return Task.CompletedTask;
+                 return;
 
              _explorerLauncher.OpenInExplorer(node.FullPath);
          }
          catch (Exception e)
          {
              Log.Error(e, "Failed to open node in explorer: {NodePath}", node?.FullPath);
-             _ = _errorDialogService.ShowErrorAsync(
+             await _errorDialogService.ShowErrorAsync(
                  "Failed to Open in Explorer",
                  $"Could not open the path in File Explorer:\n{node?.FullPath}",
                  e);
          }
-         return Task.CompletedTask;
      }
 
      [RelayCommand]

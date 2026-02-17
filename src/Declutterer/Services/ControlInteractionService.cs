@@ -11,7 +11,7 @@ namespace Declutterer.Services;
 /// </summary>
 public sealed class ControlInteractionService
 {
-    private double _lastPointerPressedTime = 0; // For detecting double-clicks
+    private double _lastPointerReleasedTime = 0; // For detecting double-clicks
     
     /// <summary>
     /// Initializes a pointer double-pressed handler on the given control. When a double-click is detected, it resolves the TreeNode under the pointer and invokes the provided callback.
@@ -21,20 +21,20 @@ public sealed class ControlInteractionService
     /// <param name="onBeforeActionCondition">Optional callback to check a condition before processing the double-click. If it evaluates to true the double-click action will be skipped.</param>
     public void InitializePointerDoublePressedHandler(Control control, Action<TreeNode?> onNodeDoubleClick, Func<bool>? onBeforeActionCondition = null)
     {
-        control.PointerPressed += (_, args) =>
+        control.PointerReleased += (_, args) =>
         {
             if(onBeforeActionCondition != null && onBeforeActionCondition())
                 return;
-            
-            if(args.GetCurrentPoint(control).Properties.IsLeftButtonPressed)
+
+            if(args.GetCurrentPoint(control).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonReleased)
             {
                 double currentTime = args.Timestamp;
-                if (currentTime - _lastPointerPressedTime < 300) // 300ms threshold for double-click
+                if (currentTime - _lastPointerReleasedTime < 300) // 300ms threshold for double-click
                 {
                     onNodeDoubleClick(GetNodeFromPointerEvent(control, args));
                     return;
                 }
-                _lastPointerPressedTime = currentTime;
+                _lastPointerReleasedTime = currentTime;
             }
         };
     }
@@ -71,7 +71,7 @@ public sealed class ControlInteractionService
         return null;
     }
     
-    private static TreeNode? GetNodeFromPointerEvent(Control control, PointerPressedEventArgs args)
+    private static TreeNode? GetNodeFromPointerEvent(Control control, PointerReleasedEventArgs args)
     {
         var point = args.GetCurrentPoint(control).Position;
         return GetNodeFromPointer(control, point);

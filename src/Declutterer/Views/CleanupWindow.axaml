@@ -63,7 +63,7 @@
         <!--  Grouped List of items (Scrollable)  -->
         <Grid Grid.Row="2">
             <ScrollViewer
-                IsVisible="{Binding ItemsToDelete.Count, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}"
+                IsVisible="{Binding ItemsToDelete.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
                 Margin="10"
                 VerticalScrollBarVisibility="Auto">
                 <StackPanel Orientation="Vertical" Spacing="10">
@@ -73,7 +73,7 @@
                         BorderBrush="#CCCCCC"
                         BorderThickness="1"
                         CornerRadius="4"
-                        IsVisible="{Binding LargeDirectories.Count, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}"
+                        IsVisible="{Binding LargeDirectories.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
                         Padding="10">
                         <StackPanel Orientation="Vertical" Spacing="8">
                             <!--  Group Header  -->
@@ -100,11 +100,13 @@
                                                 <Image
                                                     Grid.Column="0"
                                                     Height="28"
+                                                    IsHitTestVisible="False"
                                                     Margin="0,0,10,0"
                                                     Source="{Binding Icon}" />
                                                 <!--  Item details  -->
                                                 <StackPanel
                                                     Grid.Column="1"
+                                                    IsHitTestVisible="False"
                                                     Orientation="Vertical"
                                                     VerticalAlignment="Center">
                                                     <TextBlock FontWeight="Bold" Text="{Binding Name}" />
@@ -144,7 +146,7 @@
                         BorderBrush="#CCCCCC"
                         BorderThickness="1"
                         CornerRadius="4"
-                        IsVisible="{Binding LargeFiles.Count, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}"
+                        IsVisible="{Binding LargeFiles.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
                         Padding="10">
                         <StackPanel Orientation="Vertical" Spacing="8">
                             <!--  Group Header  -->
@@ -171,11 +173,13 @@
                                                 <Image
                                                     Grid.Column="0"
                                                     Height="28"
+                                                    IsHitTestVisible="False"
                                                     Margin="0,0,10,0"
                                                     Source="{Binding Icon}" />
                                                 <!--  Item details  -->
                                                 <StackPanel
                                                     Grid.Column="1"
+                                                    IsHitTestVisible="False"
                                                     Orientation="Vertical"
                                                     VerticalAlignment="Center">
                                                     <TextBlock FontWeight="Bold" Text="{Binding Name}" />
@@ -215,7 +219,7 @@
                         BorderBrush="#CCCCCC"
                         BorderThickness="1"
                         CornerRadius="4"
-                        IsVisible="{Binding OldFiles.Count, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}"
+                        IsVisible="{Binding OldFiles.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
                         Padding="10">
                         <StackPanel Orientation="Vertical" Spacing="8">
                             <!--  Group Header  -->
@@ -242,11 +246,13 @@
                                                 <Image
                                                     Grid.Column="0"
                                                     Height="28"
+                                                    IsHitTestVisible="False"
                                                     Margin="0,0,10,0"
                                                     Source="{Binding Icon}" />
                                                 <!--  Item details  -->
                                                 <StackPanel
                                                     Grid.Column="1"
+                                                    IsHitTestVisible="False"
                                                     Orientation="Vertical"
                                                     VerticalAlignment="Center">
                                                     <TextBlock FontWeight="Bold" Text="{Binding Name}" />
@@ -286,7 +292,7 @@
                         BorderBrush="#CCCCCC"
                         BorderThickness="1"
                         CornerRadius="4"
-                        IsVisible="{Binding OtherItems.Count, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}"
+                        IsVisible="{Binding OtherItems.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
                         Padding="10">
                         <StackPanel Orientation="Vertical" Spacing="8">
                             <!--  Group Header  -->
@@ -313,11 +319,13 @@
                                                 <Image
                                                     Grid.Column="0"
                                                     Height="28"
+                                                    IsHitTestVisible="False"
                                                     Margin="0,0,10,0"
                                                     Source="{Binding Icon}" />
                                                 <!--  Item details  -->
                                                 <StackPanel
                                                     Grid.Column="1"
+                                                    IsHitTestVisible="False"
                                                     Orientation="Vertical"
                                                     VerticalAlignment="Center">
                                                     <TextBlock FontWeight="Bold" Text="{Binding Name}" />

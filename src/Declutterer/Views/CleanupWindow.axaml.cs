@@ -10,19 +10,16 @@ public partial class CleanupWindow : Window
     public CleanupWindow()
     {
         InitializeComponent();
-        
-        // Set up the ViewModel with the TopLevel for folder picker
-        if (DataContext is CleanupWindowViewModel viewModel)
-        {
-            viewModel.SetTopLevel(this);
-        }
     }
     
     protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
     {
         base.OnLoaded(e);
+       
         if (DataContext is CleanupWindowViewModel viewModel)
         {
+            // Set up the ViewModel with the TopLevel for clipboard access
+            viewModel.SetTopLevel(this);
             // Init Shared interactions
             var controlInteractionService = new ControlInteractionService();
 
