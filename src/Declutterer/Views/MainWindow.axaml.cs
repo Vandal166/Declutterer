@@ -1,5 +1,6 @@
 using System;
 using Avalonia.Controls;
+using Declutterer.Abstractions;
 using Declutterer.Factories;
 using Declutterer.ViewModels;
 using Declutterer.Services;
@@ -10,16 +11,18 @@ public partial class MainWindow : Window
 {
     private readonly TreeGridInteractionService _interactionService;
     
-    public MainWindow(TreeGridInteractionService interactionService)
+    public MainWindow(TreeGridInteractionService interactionService, INavigationService navigationService, IClipboardService clipboardService)
     {
         InitializeComponent();
         
         _interactionService = interactionService;
+
+        navigationService.SetOwnerWindow(this);
         
-        // Set up the ViewModel with the TopLevel for folder picker
-        if (DataContext is MainWindowViewModel viewModel)
+        // Initialize the clipboard service with the window's clipboard
+        if (clipboardService is AvaloniaClipboardService avaloniaClipboardService)
         {
-            viewModel.SetTopLevel(this);
+            avaloniaClipboardService.SetClipboard(this.Clipboard);
         }
         
         // Clean up resources when window is closed

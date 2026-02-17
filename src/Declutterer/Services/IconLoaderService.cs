@@ -16,7 +16,7 @@ public class IconLoaderService : IIconLoader
     /// <summary>
     /// Clears the icon bitmap cache. Call this before a new scan to ensure icons are reloaded.
     /// </summary>
-    public static void ClearCache()
+    public void ClearCache()
     {
         _iconCache.Clear();
     }

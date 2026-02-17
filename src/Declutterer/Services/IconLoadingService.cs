@@ -32,6 +32,7 @@ public class IconLoadingService
     public void ClearLoadedPathsCache()
     {
         _loadedPaths.Clear();
+        _iconLoaderService.ClearCache();
     }
 
     /// <summary>

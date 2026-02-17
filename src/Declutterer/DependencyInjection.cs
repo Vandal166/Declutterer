@@ -33,5 +33,13 @@ public static class DependencyInjection
         
         collection.AddSingleton<IExplorerLauncher, WindowsExplorerLauncher>();
         collection.AddSingleton<IErrorDialogService, ErrorDialogService>();
+        
+        collection.AddSingleton<IContextMenuService, TreeGridContextMenuService>();
+        collection.AddSingleton<ICommandService, CommandService>();
+        
+        collection.AddSingleton<IScanWorkflowService, ScanWorkflowService>();
+        collection.AddSingleton<INavigationService, NavigationService>();
+        collection.AddSingleton<ITreeNavigationService, TreeNavigationService>();
+        collection.AddSingleton<IClipboardService, AvaloniaClipboardService>();
     }
 }

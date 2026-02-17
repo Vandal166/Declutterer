@@ -1,14 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Declutterer.Models;
 using Declutterer.ViewModels;
-using Serilog;
 
 namespace Declutterer.Services;
 
@@ -18,10 +14,6 @@ public sealed class TreeGridInteractionService
     private readonly IconLoadingService _iconLoadingService;
     private double _lastPointerPressedTime = 0; // For detecting double-clicks
     
-    // NOTE: This service is a singleton with application lifetime. Event subscriptions here
-    // don't cause memory leaks since the service, TreeDataGrid, and ViewModel all live for
-    // the same duration. The critical memory leak prevention is handled in MainWindowViewModel.Dispose()
-    // where node subscriptions are properly cleaned up.
     public TreeGridInteractionService(MainWindowViewModel viewModel, IconLoadingService iconLoadingService)
     {
         _viewModel = viewModel;
@@ -42,7 +34,6 @@ public sealed class TreeGridInteractionService
                 
         // Handle pointer events to detect Alt+Click on expander
         InitializePointerPressedEvent(treeDataGrid);
-        
     }
     
     /// <summary>
@@ -112,7 +103,7 @@ public sealed class TreeGridInteractionService
                                     bool willExpand = !node.IsExpanded;
                                             
                                     // Fire and forget - expand/collapse all descendants
-                                    _ = HandleAltClickExpandAsync(node, willExpand);
+                                    _ = _viewModel.HandleAltClickExpandAsync(node, willExpand);
                                 }
                                 break;
                             }
@@ -144,22 +135,22 @@ public sealed class TreeGridInteractionService
     {
         source.RowExpanding += async (sender, args) =>
         {
-            if( _viewModel.IsExpandingAll) 
-                return; // Skip if we're already in the middle of an expand/collapse all operation triggered by Alt+Click
-            
             if (args.Row.Model is { IsDirectory: true, HasChildren: true} node)
             {
-                // if children not loaded yet then load them and skip loading children for root nodes since we already load them with children in the initial scan
-                // NOTE: this fixed the duplicate entries issue
-                if (node.Children.Count == 0 && node.Depth != 0) 
+                if (!_viewModel.IsExpandingAll)
                 {
-                    await _viewModel.LoadChildrenForNodeAsync(node);
-                }
-               
-                // Pre-load grandchildren for any child directories that don't have their children loaded yet
-                foreach (var child in node.Children.Where(c => c is { IsDirectory: true, HasChildren: true, Children.Count: 0 }))
-                {
-                    _ = _viewModel.LoadChildrenForNodeAsync(child);
+                    // if children not loaded yet then load them and skip loading children for root nodes since we already load them with children in the initial scan
+                    // NOTE: this fixed the duplicate entries issue
+                    if (node.Children.Count == 0 && node.Depth != 0) 
+                    {
+                        await _viewModel.LoadChildrenForNodeAsync(node);
+                    }
+                   
+                    // Pre-load grandchildren for any child directories that don't have their children loaded yet
+                    foreach (var child in node.Children.Where(c => c is { IsDirectory: true, HasChildren: true, Children.Count: 0 }))
+                    {
+                        _ = _viewModel.LoadChildrenForNodeAsync(child);
+                    }
                 }
                 
                 // Subscribe to PropertyChanged for each child to detect IsSelected changes
@@ -168,78 +159,12 @@ public sealed class TreeGridInteractionService
                     _viewModel.SubscribeToNodeSelectionChanges(child);
                 }
                 
-                // Request lazy loading of icons for visible children
+                // ALWAYS request lazy loading of icons for visible children, even during Alt+Click expansion
                 _iconLoadingService.RequestIconLoadForVisibleNodes(node.Children);
             }
         };
     }
 
-    //TODO should these two belong in here or in the ViewModel? They are more about the logic of toggling nodes than about handling interactions
-    private async Task HandleAltClickExpandAsync(TreeNode node, bool shouldExpand)
-    {
-        var sw = new Stopwatch();
-        sw.Start();
-        try
-        {
-            _viewModel.IsExpandingAll = true;
-            // Pass isRoot=true so we skip setting IsExpanded on the clicked root node (the TreeDataGrid handles the root node's toggle via normal click processing)
-            await ToggleAllDescendantsAsync(node, shouldExpand, isRoot: true);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Error during Alt+Click expand/collapse for node '{NodeName}'", node.Name);
-        }
-        finally
-        {
-            _viewModel.IsExpandingAll = false;
-            sw.Stop();
-            Log.Information("Completed Alt+Click expand/collapse for node '{NodeName}' in {ElapsedMilliseconds} ms", node.Name, sw.ElapsedMilliseconds);
-        }
-    }
-    
-    /// <summary>
-    /// Recursively toggles the expansion state of a node and all its descendants.
-    /// Uses parallel processing with task batching to efficiently handle large directory trees.
-    /// </summary>
-    /// <param name="node">The node to process</param>
-    /// <param name="shouldExpand">Whether to expand or collapse</param>
-    /// <param name="isRoot">True if this is the root node of the Alt+Click (its toggle is handled by TreeDataGrid)</param>
-    private async Task ToggleAllDescendantsAsync(TreeNode node, bool shouldExpand, bool isRoot = false)
-    {
-        // Load children if not already loaded
-        if (node.Children.Count == 0 && node is { IsDirectory: true, HasChildren: true } && shouldExpand)
-        {
-            await _viewModel.LoadChildrenParallelAsync(new List<TreeNode> { node});
-        }
-        
-        foreach (var child in node.Children)
-        {
-            child.IsExpanded = shouldExpand;
-        }
-        
-        // Process all child directories recursively in parallel
-        var directoryChildren = node.Children
-            .Where(child => child is { IsDirectory: true, HasChildren: true })
-            .ToList();
-        
-        if (directoryChildren.Count > 0)
-        {
-            // Process all directory children concurrently
-            var tasks = directoryChildren
-                .Select(child => ToggleAllDescendantsAsync(child, shouldExpand, isRoot: false))
-                .ToList();
-            
-            await Task.WhenAll(tasks);
-        }
-        
-        // Only set expansion state for this node if it's NOT the root of the Alt+Click
-        // The TreeDataGrid handles the root node's toggle via normal click processing
-        if (!isRoot)
-        {
-            node.IsExpanded = shouldExpand;
-        }
-    }
-    
     private static TreeNode? GetNodeFromPointer(Control Control, Avalonia.Point point)
     {
         var visual = Control.InputHitTest(point) as Control;

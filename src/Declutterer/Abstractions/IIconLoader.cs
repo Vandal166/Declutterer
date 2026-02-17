@@ -6,4 +6,5 @@ namespace Declutterer.Abstractions;
 public interface IIconLoader
 {
     Task<Bitmap?> LoadIconAsync(string fullPath, bool isDirectory = false);
+    void ClearCache();
 }

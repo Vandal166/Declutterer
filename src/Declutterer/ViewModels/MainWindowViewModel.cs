@@ -3,25 +3,18 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Avalonia.Controls;
-using Avalonia.Input.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Declutterer.Abstractions;
 using Declutterer.Common;
 using Declutterer.Models;
-using Declutterer.Services;
-using Declutterer.Views;
-using Serilog;
 
 namespace Declutterer.ViewModels;
 
 //TODO: add exclusions for Directories so they won't be scanned at all, not even shown in the tree, Persist the exclusions in some form of settings like json file
 
-//TODO 2: disable action buttons when no nodes are selected or when an scan is in progress
 public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextMenuProvider
 {
     // ObservableProperty is used to generate the property with INotifyPropertyChanged implementation which will notify the UI when the property changes
@@ -36,18 +29,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     
     public bool IsExpandingAll { get; set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
     
-    private readonly DirectoryScanService _directoryScanService;
-    private readonly SmartSelectionService _smartSelectionService;
-    
-    private readonly IDispatcher _dispatcher;
-    private readonly IExplorerLauncher _explorerLauncher;
-    private readonly IconLoadingService _iconLoadingService;
-    private readonly IErrorDialogService _errorDialogService;
-    
+    private readonly IContextMenuService _contextMenuService;
+    private readonly ICommandService _commandService;
+    private readonly INavigationService _navigationService;
+    private readonly IScanWorkflowService _scanWorkflowService;
+    private readonly ITreeNavigationService _treeNavigationService;
+    private readonly IClipboardService _clipboardService;
     private bool _isUpdatingSelection = false; // Guard against re-entrancy during recursive selection updates
 
     private ScanOptions? _currentScanOptions;
-    private TopLevel? _topLevel;
     
     // an collection of root TreeNodes representing the top-level directories added by the user
     // TreeDataGrid will automatically handle hierarchical display using the Children collection
@@ -57,14 +47,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     private readonly HashSet<TreeNode> _subscribedNodes = new();
     private readonly Dictionary<TreeNode, PropertyChangedEventHandler> _nodePropertyHandlers = new();
     
-    public MainWindowViewModel(DirectoryScanService directoryScanService, SmartSelectionService smartSelectionService, IDispatcher dispatcher, IconLoadingService iconLoadingService, IExplorerLauncher explorerLauncher, IErrorDialogService errorDialogService)
+    public MainWindowViewModel(INavigationService navigationService, IScanWorkflowService scanWorkflowService, ITreeNavigationService treeNavigationService,
+        IContextMenuService contextMenuService, ICommandService commandService, IClipboardService clipboardService)
     {
-        _directoryScanService = directoryScanService;
-        _smartSelectionService = smartSelectionService;
-        _dispatcher = dispatcher;
-        _iconLoadingService = iconLoadingService;
-        _explorerLauncher = explorerLauncher;
-        _errorDialogService = errorDialogService;
+        _navigationService = navigationService;
+        _scanWorkflowService = scanWorkflowService;
+        _treeNavigationService = treeNavigationService;
+        _contextMenuService = contextMenuService;
+        _commandService = commandService;
+        _clipboardService = clipboardService;
 
         // selection change tracking
         SelectedNodes.CollectionChanged += OnSelectedNodesCollectionChanged;
@@ -76,7 +67,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     }
 
     public MainWindowViewModel() { } // for designer
-    
+        
     private void UpdateSelectedNodesSize()
     {
         var selectedNodesSize = SelectedNodes.Sum(n => n.Size);
@@ -86,59 +77,17 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     // Loads subdirectories and files for a given node when it's expanded. This is called from the UI when a node is expanded.
     public async Task LoadChildrenForNodeAsync(TreeNode node)
     {
-        if (node.Children.Count > 0)
-            return; // Already loaded
-        
         IsAnyNodeLoading = true;
         try
         {
-            var children = await _directoryScanService.LoadChildrenAsync(node, _currentScanOptions);
-            
-            await _dispatcher.InvokeAsync(() =>
-            {
-                foreach (var child in children)
-                {
-                    node.Children.Add(child);
-                }
-            });
-            
-            // Pre-load children for subdirectories (one level ahead) so expansion works immediately
-            var preloadTasks = children
-                .Where(c => c is { IsDirectory: true, HasChildren: true })
-                .Select(PreloadChildrenAsync);
-            await Task.WhenAll(preloadTasks);
+            await _treeNavigationService.LoadChildrenForNodeAsync(node, _currentScanOptions);
         }
         finally
         {
             IsAnyNodeLoading = false;
         }
     }
-
-    private async Task PreloadChildrenAsync(TreeNode node)
-    {
-        if (node.Children.Count > 0)
-            return; // Already loaded
-
-        var children = await _directoryScanService.LoadChildrenAsync(node, _currentScanOptions);
-        
-        await _dispatcher.InvokeAsync(() =>
-        {
-            foreach (var child in children)
-            {
-                node.Children.Add(child);
-            }
-        });
-    }
-
-    public void SetTopLevel(TopLevel topLevel)
-    {
-        _topLevel = topLevel;
-        if (topLevel is Window window)
-        {
-            _errorDialogService.SetOwnerWindow(window);
-        }
-    }
-
+    
     [RelayCommand]
     private void ClearAll()
     {
@@ -149,150 +98,69 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     }
     
     [RelayCommand]
-    private void SelectAll()
-    {        
-        var rootChildrenToSelect = Roots.SelectMany(r => r.Children);
-        foreach (var child in rootChildrenToSelect)
-        {
-            child.IsCheckboxSelected = true;
-        }
-    }
+    private void SelectAll() => _commandService.SelectAllChildren(Roots);
 
     [RelayCommand]
-    private void DeselectAll()
-    {
-        foreach (var node in SelectedNodes.ToList())
-        {
-            node.IsCheckboxSelected = false; // This will trigger the UI to uncheck the node and also update the SelectedNodes collection through the binding
-        }
-        SelectedNodes.Clear();
-    }
-    
+    private void DeselectAll() => _commandService.DeselectAll(SelectedNodes);
+
     [RelayCommand]
-    private void SmartSelect()
-    {
-        if (_currentScanOptions is null)
-            return;
-        
-        DeselectAll();
-        foreach (var rootChild in Roots)
-        {
-            var toSelect = _smartSelectionService.Select(rootChild, _currentScanOptions, new ScorerOptions());
-            foreach (var selectedNode in toSelect)
-            {
-                selectedNode.IsCheckboxSelected = true; // Update the node's selection state for UI binding
-                SelectedNodes.Add(selectedNode);
-            }
-        }
-    }
-    
+    private void SmartSelect() => _commandService.SmartSelect(Roots, _currentScanOptions, SelectedNodes);
+
     [RelayCommand]
     private async Task ShowScanOptionsWindowAsync()
     {
-        var scanOptionsWindow = new ScanOptionsWindow
+        var result = await _navigationService.ShowScanOptionsAsync();
+        if (result != null)
         {
-            DataContext = new ScanOptionsWindowViewModel()
-        };
+            _currentScanOptions = result;
 
-        if (_topLevel is Window window)
-        {
-            // This triggers the scanning:
-            
-            var result = await scanOptionsWindow.ShowDialog<ScanOptions?>(window);
-            if (result != null) // after we click on 'Scan' in the ScanOptionsWindow, we get the ScanOptions result here and proceed to scan
+            // Clean up old subscriptions before clearing roots
+            UnsubscribeFromAllNodes();
+            SelectedNodes.Clear();
+
+            var validRoots = new List<TreeNode>();
+            IsAnyNodeLoading = true;
+            try
             {
-                _currentScanOptions = result;
+                bool scanSucceeded = await _scanWorkflowService.ExecuteScanAsync(result, validRoots);
+                NoChildrenFound = !scanSucceeded;
 
-                // Clear all cached icons so icons are reloaded on re-scans
-                _iconLoadingService.ClearLoadedPathsCache();
-                IconLoaderService.ClearCache();
-
-                // Clean up old subscriptions before clearing roots
-                UnsubscribeFromAllNodes();
-                
-                Roots.Clear();
-                NoChildrenFound = false;
-                _subscribedNodes.Clear();
-
-                var validRoots = new List<TreeNode>();
-                foreach (var directoryPath in _currentScanOptions.DirectoriesToScan.Where(Directory.Exists))
+                // Re-populate Roots from validRoots that were created
+                foreach (var root in validRoots)
                 {
-                    try
-                    {
-                        var rootNode = DirectoryScanService.CreateRootNode(directoryPath);
-                        Roots.Add(rootNode);
-                        validRoots.Add(rootNode);
-                    }
-                    catch (UnauthorizedAccessException){/*skip*/}
+                    Roots.Add(root);
                 }
-                
-                await LoadChildrenParallelAsync(validRoots);
+            }
+            finally
+            {
+                IsAnyNodeLoading = false;
             }
         }
     }
-
-    public async Task LoadChildrenParallelAsync(List<TreeNode> validRoots)
+    public async Task HandleAltClickExpandAsync(TreeNode node, bool shouldExpand)
     {
         IsAnyNodeLoading = true;
-                
         try
         {
-            // Load children for all roots in parallel - returns a dictionary mapping each root to its children
-            var childrenByRoot = await _directoryScanService.LoadChildrenForMultipleRootsAsync(validRoots, _currentScanOptions);
-
-            if (childrenByRoot.Values.All(children => children.Count == 0))
-            {
-                // No children were found for the selected directories based on the scan options
-                NoChildrenFound = true;
-                return;
-            }
-                    
-            // Reset the flag since we found children
+            // Reset the flag
             NoChildrenFound = false;
-
-            // Batch UI updates to reduce dispatcher overhead
-            const int batchSize = 100;
-            await _dispatcher.InvokeAsync(() =>
-            {
-                foreach (var root in validRoots)
-                {
-                    if (childrenByRoot.TryGetValue(root, out var children)) // if we got children for this root then add them to the root's Children collection
-                    {
-                        // Add children in batches to avoid overwhelming the UI thread
-                        for (int i = 0; i < children.Count; i += batchSize)
-                        {
-                            var batch = children.Skip(i).Take(batchSize);
-                            foreach (var child in batch)
-                            {
-                                root.Children.Add(child);
-                            }
-                        }
-                        root.IsExpanded = true;
-                    }
-                }
-            });
+            IsExpandingAll = true;
+            // Pass isRoot=true so we skip setting IsExpanded on the clicked root node (the TreeDataGrid handles the root node's toggle via normal click processing)
+            await _treeNavigationService.ToggleAllDescendantsAsync(node, shouldExpand, isRoot: true, currentScanOptions: _currentScanOptions);
         }
         finally
         {
+            IsExpandingAll = false;
             IsAnyNodeLoading = false;
         }
     }
-
     [RelayCommand]
     private async Task ShowCleanupWindowAsync()
     {
         if (SelectedNodes.Count == 0)
             return;
 
-        var cleanupWindow = new CleanupWindow
-        {
-            DataContext = new CleanupWindowViewModel(SelectedNodes, _explorerLauncher, _errorDialogService) // passing the selected nodes and dependencies to the CleanupWindowViewModel so it can display them and perform cleanup actions
-        };
-        
-        if (_topLevel is Window window)
-        {
-            await cleanupWindow.ShowDialog(window);
-        }
+        await _navigationService.ShowCleanupWindowAsync(SelectedNodes);
     }
     
     /// <summary>
@@ -441,51 +309,23 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     [RelayCommand]
     private Task ContextMenuSelect(TreeNode? node)
     {
-        node?.IsCheckboxSelected = !node.IsCheckboxSelected;
+        _contextMenuService.ToggleNodeSelection(node);
         return Task.CompletedTask;
     }
 
     [RelayCommand]
     private async Task ContextMenuOpenInExplorer(TreeNode? node)
     {
-        try
-        {
-            if (node is null)
-                return;
-            
-            _explorerLauncher.OpenInExplorer(node.FullPath);
-        }
-        catch (Exception e)
-        {
-            Log.Error(e, "Failed to open node in explorer: {NodePath}", node?.FullPath);
-            await _errorDialogService.ShowErrorAsync(
-                "Failed to Open in Explorer",
-                $"Could not open the path in File Explorer:\n{node?.FullPath}",
-                e);
-        }
+        await _contextMenuService.OpenInExplorerAsync(node);
     }
 
     [RelayCommand]
     private async Task ContextMenuCopyPath(TreeNode? node)
     {
-        try
-        {
-            if (node is null)
-                return;
+        if (node is null)
+            return;
 
-            if (_topLevel?.Clipboard is IClipboard clipboard)
-            {
-                await clipboard.SetTextAsync(node.FullPath);
-            }
-        }
-        catch (Exception e)
-        {
-            Log.Error(e, "Failed to copy path to clipboard: {NodePath}", node?.FullPath);
-            await _errorDialogService.ShowErrorAsync(
-                "Failed to Copy Path",
-                $"Could not copy the path to clipboard:\n{node?.FullPath}",
-                e);
-        }
+        await _clipboardService.CopyTextAsync(node.FullPath);
     }
     
     public void SubscribeToNodeSelectionChanges(TreeNode node)
