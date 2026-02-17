@@ -36,6 +36,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     private readonly ITreeNavigationService _treeNavigationService;
     private readonly IClipboardService _clipboardService;
     private readonly ISelectionManagementService _selectionManagementService;
+    private EventHandler<PropertyChangedEventArgs>? _selectionChangedHandler;
 
     private ScanOptions? _currentScanOptions;
     
@@ -60,13 +61,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         SelectedNodes.CollectionChanged += OnSelectedNodesCollectionChanged;
         
         // Subscribe to selection management service events
-        _selectionManagementService.OnNodePropertyChanged += (node, args) =>
+        _selectionChangedHandler = (node, args) =>
         {
             if (node is TreeNode treeNode)
             {
                 _selectionManagementService.HandleNodeSelectionChanged(treeNode, SelectedNodes);
             }
         };
+        _selectionManagementService.OnNodePropertyChanged += _selectionChangedHandler;
     }
 
     private void OnSelectedNodesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -233,6 +235,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         {
             // Unsubscribe from SelectedNodes collection changes
             SelectedNodes.CollectionChanged -= OnSelectedNodesCollectionChanged;
+        
+            // Unsubscribe from selection management service events
+            if (_selectionChangedHandler != null)
+            {
+                _selectionManagementService.OnNodePropertyChanged -= _selectionChangedHandler;
+            }
         
             // Dispose selection management service
             _selectionManagementService.Dispose();

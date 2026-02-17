@@ -133,7 +133,7 @@ public sealed class SelectionManagementService : ISelectionManagementService
         }
     }
     
-    private static void SetIsSelectedRecursivelyInternal(ObservableCollection<TreeNode> nodes, bool isSelected, ObservableHashSet<TreeNode> selectedNodes)
+    private void SetIsSelectedRecursivelyInternal(ObservableCollection<TreeNode> nodes, bool isSelected, ObservableHashSet<TreeNode> selectedNodes)
     {
         foreach (var child in nodes)
         {
