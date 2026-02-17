@@ -27,7 +27,28 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
     private ObservableCollection<TreeNode> _itemsToDelete = new();
     
     [ObservableProperty]
-    private ObservableCollection<ItemGroup> _groupedItems = new();
+    private ObservableCollection<TreeNode> _largeDirectories = new();
+    
+    [ObservableProperty]
+    private ObservableCollection<TreeNode> _largeFiles = new();
+    
+    [ObservableProperty]
+    private ObservableCollection<TreeNode> _oldFiles = new();
+    
+    [ObservableProperty]
+    private ObservableCollection<TreeNode> _otherItems = new();
+    
+    [ObservableProperty]
+    private string _largeDirectoriesSize = "0 B";
+    
+    [ObservableProperty]
+    private string _largeFilesSize = "0 B";
+    
+    [ObservableProperty]
+    private string _oldFilesSize = "0 B";
+    
+    [ObservableProperty]
+    private string _otherItemsSize = "0 B";
     
     [ObservableProperty]
     private bool _sendToRecycleBin = true; // Default to safer option
@@ -87,19 +108,22 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
     
     private void BuildGroupedItems()
     {
-        GroupedItems.Clear();
+        LargeDirectories.Clear();
+        LargeFiles.Clear();
+        OldFiles.Clear();
+        OtherItems.Clear();
         
         if(ItemsToDelete.Count == 0)
-            return; //TODO show "No items to delete" message instead of empty groups
+            return;
         
         // Filter to only top-level items (exclude items nested within other items)
         // This prevents double-counting sizes when both a parent and child directory are selected
         var topLevelItems = TreeNodeHelper.GetTopLevelItems(ItemsToDelete);
         
         var now = DateTime.Now;
-        var largeFiles = new List<TreeNode>();
-        var largeDirectories = new List<TreeNode>();
-        var oldFiles = new List<TreeNode>();
+        var largeFilesList = new List<TreeNode>();
+        var largeDirectoriesList = new List<TreeNode>();
+        var oldFilesList = new List<TreeNode>();
         
         foreach (var item in topLevelItems)
         {
@@ -107,63 +131,50 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
             {
                 if (item.IsDirectory)
                 {
-                    largeDirectories.Add(item);
+                    largeDirectoriesList.Add(item);
                 }
                 else
                 {
-                    largeFiles.Add(item);
+                    largeFilesList.Add(item);
                 }
             }
             
             if (item.LastModified.HasValue && (now - item.LastModified.Value) > OldFileThreshold)
             {
-                oldFiles.Add(item);
+                oldFilesList.Add(item);
             }
         }
         
-        
-        // Add Large Directories group
-        if (largeDirectories.Count > 0)
+        // Populate Large Directories collection
+        foreach (var item in largeDirectoriesList.OrderByDescending(d => d.Size))
         {
-            GroupedItems.Add(new ItemGroup
-            {
-                GroupName = $"{largeDirectories.Count} Large Directories (>100MB)",
-                Items = new ObservableCollection<TreeNode>(largeDirectories.OrderByDescending(d => d.Size))
-            });
+            LargeDirectories.Add(item);
         }
+        LargeDirectoriesSize = ByteConverter.ToReadableString(largeDirectoriesList.Sum(d => d.Size));
         
-        // Add Large Files group
-        if (largeFiles.Count > 0)
+        // Populate Large Files collection
+        foreach (var item in largeFilesList.OrderByDescending(f => f.Size))
         {
-            GroupedItems.Add(new ItemGroup
-            {
-                GroupName = $"{largeFiles.Count} Large Files (>100MB)",
-                Items = new ObservableCollection<TreeNode>(largeFiles.OrderByDescending(f => f.Size))
-            });
+            LargeFiles.Add(item);
         }
+        LargeFilesSize = ByteConverter.ToReadableString(largeFilesList.Sum(f => f.Size));
         
-        // Add Old Files group
-        if (oldFiles.Count > 0)
+        // Populate Old Files collection
+        foreach (var item in oldFilesList.OrderBy(f => f.LastModified)) // Oldest first
         {
-            GroupedItems.Add(new ItemGroup
-            {
-                GroupName = $"{oldFiles.Count} Old Files (Last Modified > 2 years ago)",
-                Items = new ObservableCollection<TreeNode>(oldFiles.OrderBy(f => f.LastModified)) // Oldest first
-            });
+            OldFiles.Add(item);
         }
+        OldFilesSize = ByteConverter.ToReadableString(oldFilesList.Sum(f => f.Size));
         
-        // Add remaining items to "Other" group if not all items were categorized
-        var categorizedItems = new HashSet<TreeNode>(largeFiles.Concat(largeDirectories).Concat(oldFiles));
-        var otherItems = topLevelItems.Where(item => !categorizedItems.Contains(item)).ToList();
+        // Populate Other Items collection
+        var categorizedItems = new HashSet<TreeNode>(largeFilesList.Concat(largeDirectoriesList).Concat(oldFilesList));
+        var otherItemsList = topLevelItems.Where(item => !categorizedItems.Contains(item)).ToList();
         
-        if (otherItems.Count > 0)
+        foreach (var item in otherItemsList)
         {
-            GroupedItems.Add(new ItemGroup
-            {
-                GroupName = $"{otherItems.Count} Other Items",
-                Items = new ObservableCollection<TreeNode>(otherItems)
-            });
+            OtherItems.Add(item);
         }
+        OtherItemsSize = ByteConverter.ToReadableString(otherItemsList.Sum(i => i.Size));
     }
     
     public void SetTopLevel(TopLevel topLevel) => _topLevel = topLevel;
