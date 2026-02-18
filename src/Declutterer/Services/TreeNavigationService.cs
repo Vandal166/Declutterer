@@ -100,7 +100,7 @@ public sealed class TreeNavigationService : ITreeNavigationService
                 
                 await Task.WhenAll(tasks);
                 
-                // Yield to UI thread after each batch to allow rendering and processing property change notifications
+                // Yield to UI thread after each batch (empty lambda ensures UI message pump processes pending updates)
                 await _dispatcher.InvokeAsync(() => { });
             }
         }
