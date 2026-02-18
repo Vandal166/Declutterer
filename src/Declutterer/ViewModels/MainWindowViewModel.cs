@@ -125,18 +125,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
             _selectionManagementService.UnsubscribeFromAllNodes();
             SelectedNodes.Clear();
 
-            var validRoots = new List<TreeNode>();
             IsAnyNodeLoading = true;
             try
             {
-                bool scanSucceeded = await _scanWorkflowService.ExecuteScanAsync(result, validRoots);
+                bool scanSucceeded = await _scanWorkflowService.ExecuteScanAsync(result, Roots);
                 NoChildrenFound = !scanSucceeded;
-
-                // Re-populate Roots from validRoots that were created
-                foreach (var root in validRoots)
-                {
-                    Roots.Add(root);
-                }
             }
             finally
             {

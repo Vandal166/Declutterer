@@ -93,7 +93,6 @@ public sealed class TreeNavigationService : ITreeNavigationService
             .Where(child => child is { IsDirectory: true, HasChildren: true })
             .ToList();
         
-
         if (directoryChildren.Count > 0)
         {
             // Process directory children in smaller batches to allow UI updates

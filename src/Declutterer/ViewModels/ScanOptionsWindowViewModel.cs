@@ -31,6 +31,9 @@ public sealed partial class ScanOptionsWindowViewModel : ViewModelBase
     public event Action<ScanOptions>? RequestClose;
     public void SetTopLevel(TopLevel topLevel) => _topLevel = topLevel;
     
+    //TODO: low prio, when trying to input 'nothing' to the scanOptions inputs:
+    //System.InvalidCastException could not convert '(null)' (null) to System.Int64 (does not cause app crash)
+    
     [RelayCommand]
     private async Task OnAddDirectoryAsync()
     {

@@ -97,7 +97,6 @@ public sealed class DirectoryScanService
             
             // Enumerate subdirectories once and cache the result
             var subdirectories = dirInfo.GetDirectories("*", enumerationOptions);
-            bool hasAnyEntries = subdirectories.Length > 0 || dirInfo.GetFiles("*", enumerationOptions).Length > 0;
             
             // getting subdirectories in the current root directory we are in
             foreach (var dir in subdirectories) 
@@ -112,7 +111,7 @@ public sealed class DirectoryScanService
                     
                     // using cached size if available from the filter, otherwise calculate it
                     long size = wrapper.CalculatedSize ?? CalculateDirectorySize(dir);
-
+                    
                     var childNode = new TreeNode
                     {
                         Name = dir.Name,
@@ -122,7 +121,7 @@ public sealed class DirectoryScanService
                         LastModified = dir.LastWriteTime,
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
-                        HasChildren = hasAnyEntries,
+                        HasChildren = HasAnyChildren(dir, enumerationOptions, filter), // check if the directory has any children to determine if it can be expanded
                         IsCheckboxSelected = parentNode.IsCheckboxSelected, // inherit selection state from parent
                         IsCheckboxEnabled = !parentNode.IsCheckboxSelected // if parent is selected then disable the checkbox for the child since we dont want to allow unselecting a child when parent is selected, this simplifies the logic and avoids edge cases with selection state
                     };
@@ -224,7 +223,7 @@ public sealed class DirectoryScanService
                    
                     // using cached size if available from the filter, otherwise calculate it
                     long size = wrapper.CalculatedSize ?? CalculateDirectorySize(dir);
-
+                    
                     var childNode = new TreeNode
                     {
                         Name = dir.Name,
@@ -234,7 +233,7 @@ public sealed class DirectoryScanService
                         LastModified = dir.LastWriteTime,
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
-                        HasChildren = true, // assuming true to avoid extra I/O in parallel processing; will be verified on expansion
+                        HasChildren = HasAnyChildren(dir, enumerationOptions, filter), // check if the directory has any children to determine if it can be expanded
                         IsCheckboxSelected = parentNode.IsCheckboxSelected, // inherit selection state from parent
                         IsCheckboxEnabled = !parentNode.IsCheckboxSelected
                     };
@@ -335,4 +334,18 @@ public sealed class DirectoryScanService
     }
     
     private static void ClearSizeCache() => _sizeCache.Clear();
+    
+    private static bool HasAnyChildren(DirectoryInfo dirInfo, EnumerationOptions enumerationOptions, 
+        Func<FileSystemInfoWrapper, bool>? filter)
+    {
+        try
+        {
+            return dirInfo.EnumerateFileSystemInfos("*", enumerationOptions)
+                .Any(fsi => filter == null || filter(new FileSystemInfoWrapper { Info = fsi}));
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

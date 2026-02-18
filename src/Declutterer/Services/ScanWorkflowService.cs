@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -21,7 +22,7 @@ public sealed class ScanWorkflowService : IScanWorkflowService
         _dispatcher = dispatcher;
     }
 
-    public async Task<bool> ExecuteScanAsync(ScanOptions scanOptions, List<TreeNode> roots)
+    public async Task<bool> ExecuteScanAsync(ScanOptions scanOptions, ObservableCollection<TreeNode> roots)
     {
         // Clear caches
         _iconLoadingService.ClearLoadedPathsCache();
