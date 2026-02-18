@@ -13,6 +13,11 @@ public sealed class TreeNavigationService : ITreeNavigationService
     private readonly DirectoryScanService _directoryScanService;
     private readonly IDispatcher _dispatcher;
     private readonly IScanWorkflowService _scanWorkflowService;
+    
+    // Batch size for parallel directory expansion operations.
+    // This value balances UI responsiveness with performance by limiting concurrent operations
+    // that schedule work on the UI thread, preventing the dispatcher queue from being overwhelmed.
+    private const int ExpansionBatchSize = 20;
 
     public TreeNavigationService(DirectoryScanService directoryScanService, IDispatcher dispatcher, IScanWorkflowService scanWorkflowService)
     {
@@ -86,10 +91,9 @@ public sealed class TreeNavigationService : ITreeNavigationService
         {
             // Process directory children in smaller batches to allow UI updates
             // This prevents the UI thread from being overwhelmed with property changes
-            const int batchSize = 20;
-            for (int batchStartIndex = 0; batchStartIndex < directoryChildren.Count; batchStartIndex += batchSize)
+            for (int batchStartIndex = 0; batchStartIndex < directoryChildren.Count; batchStartIndex += ExpansionBatchSize)
             {
-                int currentBatchSize = Math.Min(batchSize, directoryChildren.Count - batchStartIndex);
+                int currentBatchSize = Math.Min(ExpansionBatchSize, directoryChildren.Count - batchStartIndex);
                 var tasks = new List<Task>(currentBatchSize);
                 
                 for (int i = 0; i < currentBatchSize; i++)
