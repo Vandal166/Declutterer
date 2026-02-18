@@ -27,7 +27,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     [ObservableProperty]
     private string _selectedNodesSizeText = string.Empty; // a user-friendly string representation of the total size of the currently selected nodes
     
-    public bool IsExpandingAll { get; set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
+    public bool IsExpandingAll { get; private set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
     
     private readonly IContextMenuService _contextMenuService;
     private readonly ICommandService _commandService;
@@ -36,7 +36,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     private readonly ITreeNavigationService _treeNavigationService;
     private readonly IClipboardService _clipboardService;
     private readonly ISelectionManagementService _selectionManagementService;
-    private EventHandler<PropertyChangedEventArgs>? _selectionChangedHandler;
+    private readonly EventHandler<PropertyChangedEventArgs>? _selectionChangedHandler;
 
     private ScanOptions? _currentScanOptions;
     
@@ -60,7 +60,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         // selection change tracking
         SelectedNodes.CollectionChanged += OnSelectedNodesCollectionChanged;
         
-        // Subscribe to selection management service events
+        // sub to selection changes on all nodes to keep SelectedNodes collection in sync
         _selectionChangedHandler = (node, args) =>
         {
             if (node is TreeNode treeNode)
@@ -71,12 +71,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         _selectionManagementService.OnNodePropertyChanged += _selectionChangedHandler;
     }
 
-    private void OnSelectedNodesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        UpdateSelectedNodesSize();
-    }
-
     public MainWindowViewModel() { } // for designer
+
+    private void OnSelectedNodesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => UpdateSelectedNodesSize();
         
     private void UpdateSelectedNodesSize()
     {
@@ -155,6 +152,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
             // Reset the flag
             NoChildrenFound = false;
             IsExpandingAll = true;
+            
             // Pass isRoot=true so we skip setting IsExpanded on the clicked root node (the TreeDataGrid handles the root node's toggle via normal click processing)
             await _treeNavigationService.ToggleAllDescendantsAsync(node, shouldExpand, isRoot: true, currentScanOptions: _currentScanOptions);
         }

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Declutterer.Abstractions;
@@ -51,7 +50,6 @@ public sealed class TreeNavigationService : ITreeNavigationService
             throw;
         }
     }
-    
     //TODO: problem, after expanding a node with Alt+Click, where the node is deeply nessted/large, visually some children won't be expanded at all
     // however their state(IsExpanded) will be set to true, and the moment I start to <SCROLL OR toggle their checkbox state OR manually expand> the ui suddenly updates and expands all those nodes that were supposed to be expanded
     public async Task ToggleAllDescendantsAsync(TreeNode node, bool shouldExpand, bool isRoot = false, ScanOptions? currentScanOptions = null)
@@ -80,6 +78,7 @@ public sealed class TreeNavigationService : ITreeNavigationService
             .Where(child => child is { IsDirectory: true, HasChildren: true })
             .ToList();
         
+
         if (directoryChildren.Count > 0)
         {
             // Process all directory children concurrently

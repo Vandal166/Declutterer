@@ -8,20 +8,12 @@ using Declutterer.Models;
 
 namespace Declutterer.Services;
 
-/// <summary>
-/// Service responsible for managing tree node selection state and event subscriptions.
-/// Handles complex selection logic including recursive operations and parent-child selection rules.
-/// </summary>
 public sealed class SelectionManagementService : ISelectionManagementService
 {
     private readonly HashSet<TreeNode> _subscribedNodes = new();
     private readonly Dictionary<TreeNode, PropertyChangedEventHandler> _nodePropertyHandlers = new();
     private bool _isUpdatingSelection = false; // Guard against re-entrancy during recursive selection updates
-
-    /// <summary>
-    /// Subscribes to selection changes for a given TreeNode.
-    /// Prevents duplicate subscriptions for the same node.
-    /// </summary>
+    
     public void SubscribeToNodeSelectionChanges(TreeNode node)
     {
         if (!_subscribedNodes.Add(node))
@@ -41,9 +33,6 @@ public sealed class SelectionManagementService : ISelectionManagementService
         node.PropertyChanged += handler;
     }
     
-    /// <summary>
-    /// Unsubscribes from all node property changes and clears tracking.
-    /// </summary>
     public void UnsubscribeFromAllNodes()
     {
         foreach (var kvp in _nodePropertyHandlers)
@@ -60,11 +49,7 @@ public sealed class SelectionManagementService : ISelectionManagementService
     /// </summary>
     public event EventHandler<PropertyChangedEventArgs>? OnNodePropertyChanged;
     
-    /// <summary>
-    /// Handles a node's selection change, updating the SelectedNodes collection
-    /// and managing child/descendant selection states.
-    /// Called whenever a TreeNode's IsSelected property changes.
-    /// </summary>
+   
     public void HandleNodeSelectionChanged(TreeNode node, ObservableHashSet<TreeNode> selectedNodes)
     {
         // Prevent re-entrancy when we're programmatically updating children
@@ -133,11 +118,10 @@ public sealed class SelectionManagementService : ISelectionManagementService
         }
     }
     
-    private void SetIsSelectedRecursivelyInternal(ObservableCollection<TreeNode> nodes, bool isSelected, ObservableHashSet<TreeNode> selectedNodes)
+    private static void SetIsSelectedRecursivelyInternal(ObservableCollection<TreeNode> nodes, bool isSelected, ObservableHashSet<TreeNode> selectedNodes)
     {
         foreach (var child in nodes)
         {
-            
             // Only update if the value is different to avoid unnecessary property change notifications
             if (child.IsCheckboxSelected != isSelected)
             {
