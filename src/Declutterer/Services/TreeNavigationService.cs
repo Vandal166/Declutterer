@@ -89,8 +89,15 @@ public sealed class TreeNavigationService : ITreeNavigationService
             const int batchSize = 20;
             for (int batchStartIndex = 0; batchStartIndex < directoryChildren.Count; batchStartIndex += batchSize)
             {
-                var batch = directoryChildren.Skip(batchStartIndex).Take(batchSize).ToList();
-                var tasks = batch.Select(child => ToggleAllDescendantsAsync(child, shouldExpand, isRoot: false, currentScanOptions)).ToList();
+                int currentBatchSize = Math.Min(batchSize, directoryChildren.Count - batchStartIndex);
+                var tasks = new List<Task>(currentBatchSize);
+                
+                for (int i = 0; i < currentBatchSize; i++)
+                {
+                    var child = directoryChildren[batchStartIndex + i];
+                    tasks.Add(ToggleAllDescendantsAsync(child, shouldExpand, isRoot: false, currentScanOptions));
+                }
+                
                 await Task.WhenAll(tasks);
                 
                 // Yield to UI thread after each batch to allow rendering and processing property change notifications
