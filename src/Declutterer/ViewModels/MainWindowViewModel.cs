@@ -35,7 +35,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     private readonly IScanWorkflowService _scanWorkflowService;
     private readonly ITreeNavigationService _treeNavigationService;
     private readonly IClipboardService _clipboardService;
-    private bool _isUpdatingSelection = false; // Guard against re-entrancy during recursive selection updates
+    private readonly ISelectionManagementService _selectionManagementService;
+    private EventHandler<PropertyChangedEventArgs>? _selectionChangedHandler;
 
     private ScanOptions? _currentScanOptions;
     
@@ -44,11 +45,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     public ObservableCollection<TreeNode> Roots { get; } = new();
     
     public ObservableHashSet<TreeNode> SelectedNodes { get; } = new(); // the currently selected nodes in the TreeDataGrid
-    private readonly HashSet<TreeNode> _subscribedNodes = new();
-    private readonly Dictionary<TreeNode, PropertyChangedEventHandler> _nodePropertyHandlers = new();
     
     public MainWindowViewModel(INavigationService navigationService, IScanWorkflowService scanWorkflowService, ITreeNavigationService treeNavigationService,
-        IContextMenuService contextMenuService, ICommandService commandService, IClipboardService clipboardService)
+        IContextMenuService contextMenuService, ICommandService commandService, IClipboardService clipboardService, ISelectionManagementService selectionManagementService)
     {
         _navigationService = navigationService;
         _scanWorkflowService = scanWorkflowService;
@@ -56,9 +55,20 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         _contextMenuService = contextMenuService;
         _commandService = commandService;
         _clipboardService = clipboardService;
+        _selectionManagementService = selectionManagementService;
 
         // selection change tracking
         SelectedNodes.CollectionChanged += OnSelectedNodesCollectionChanged;
+        
+        // Subscribe to selection management service events
+        _selectionChangedHandler = (node, args) =>
+        {
+            if (node is TreeNode treeNode)
+            {
+                _selectionManagementService.HandleNodeSelectionChanged(treeNode, SelectedNodes);
+            }
+        };
+        _selectionManagementService.OnNodePropertyChanged += _selectionChangedHandler;
     }
 
     private void OnSelectedNodesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -115,7 +125,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
             _currentScanOptions = result;
 
             // Clean up old subscriptions before clearing roots
-            UnsubscribeFromAllNodes();
+            _selectionManagementService.UnsubscribeFromAllNodes();
             SelectedNodes.Clear();
 
             var validRoots = new List<TreeNode>();
@@ -163,105 +173,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         await _navigationService.ShowCleanupWindowAsync(SelectedNodes);
     }
     
-    /// <summary>
-    /// Called whenever a TreeNode's IsSelected property changes.
-    /// </summary>
-    private void OnTreeNodeSelectionChanged(TreeNode node)
-    {
-        // Prevent re-entrancy when we're programmatically updating children
-        if (_isUpdatingSelection)
-            return;
-
-        // Update SelectedNodes collection
-        if (node.IsCheckboxSelected)
-        {
-            SelectedNodes.Add(node);
-            
-            // removing all descendants from SelectedNodes since parent selection encompasses them
-            RemoveDescendantsFromSelectedNodes(node);
-            
-            // But still update children's IsSelected visual state(they are gonna have their checkboxes disabled)
-            if (node.Children.Count > 0)
-            {
-                SetIsSelectedRecursively(node.Children, true);
-            }
-        }
-        else
-        {
-            // Remove the parent node
-            SelectedNodes.Remove(node);
-            
-            // When deselecting a parent, also deselect all children
-            if (node.Children.Count > 0)
-            {
-                SetIsSelectedRecursively(node.Children, false);
-            }
-        }
-        
-        // Update IsEnabled state for all children since parent's selection changed
-        UpdateChildrenEnabledState(node);
-    }
-
-    /// <summary>
-    /// Recursively removes all descendants of a node from the SelectedNodes collection.
-    /// Used when a parent is selected to prevent double-counting children.
-    /// </summary>
-    private void RemoveDescendantsFromSelectedNodes(TreeNode node)
-    {
-        foreach (var child in node.Children)
-        {
-            SelectedNodes.Remove(child);
-            if (child.Children.Count > 0)
-            {
-                RemoveDescendantsFromSelectedNodes(child);
-            }
-        }
-    }
-    
-    /// <summary>
-    /// Recursively sets the IsSelected property on all nodes in the collection and their descendants.
-    /// </summary>
-    private void SetIsSelectedRecursively(ObservableCollection<TreeNode> nodes, bool isSelected)
-    {
-        _isUpdatingSelection = true;
-        try
-        {
-            SetIsSelectedRecursivelyInternal(nodes, isSelected);
-        }
-        finally
-        {
-            _isUpdatingSelection = false;
-        }
-    }
-    
-    private void SetIsSelectedRecursivelyInternal(ObservableCollection<TreeNode> nodes, bool isSelected)
-    {
-        foreach (var child in nodes)
-        {
-            
-            // Only update if the value is different to avoid unnecessary property change notifications
-            if (child.IsCheckboxSelected != isSelected)
-            {
-                child.IsCheckboxSelected = isSelected;
-                
-                // Only update the SelectedNodes collection when deselecting
-                // When selecting, we don't add children since parent selection should be enough
-                if (!isSelected)
-                {
-                    SelectedNodes.Remove(child);
-                }
-            }
-            
-            // Recursively update all already-loaded children
-            // Note: Newly loaded children will inherit the IsSelected state from their parent
-            // when they are loaded via LoadChildrenAsync in DirectoryScanService
-            if (child.Children.Count > 0)
-            {
-                SetIsSelectedRecursivelyInternal(child.Children, isSelected);
-            }
-        }
-    }
-
     [RelayCommand]
     public void UpdateNodeSelection(SelectionUpdateRequest request)
     {
@@ -280,32 +191,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         }
     }
     
-    /// <summary>
-    /// Recursively updates the IsEnabled state for all descendants.
-    /// Children are disabled if they have any ancestor that is selected.
-    /// </summary>
-    private static void UpdateChildrenEnabledState(TreeNode node)
-    {
-        foreach (var child in node.Children)
-        {
-            child.IsCheckboxEnabled = !IsAnyAncestorSelected(child);
-            // Recursively update grandchildren
-            UpdateChildrenEnabledState(child);
-        }
-    }
-
-    private static bool IsAnyAncestorSelected(TreeNode node)
-    {
-        var current = node.Parent;
-        while (current != null)
-        {
-            if (current.IsCheckboxSelected)
-                return true;
-            current = current.Parent;
-        }
-        return false;
-    }
-
     [RelayCommand]
     private Task ContextMenuSelect(TreeNode? node)
     {
@@ -330,29 +215,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     
     public void SubscribeToNodeSelectionChanges(TreeNode node)
     {
-        if (!_subscribedNodes.Add(node))
-            return; // preventing another subscription for the same node, example after collapsing/expanding which can trigger multiple PropertyChanged events for the same node
-        
-        // Create and store the handler so we can unsubscribe later
-        PropertyChangedEventHandler handler = (_, args) =>
-        {
-            if (args.PropertyName == nameof(TreeNode.IsCheckboxSelected))
-            {
-                OnTreeNodeSelectionChanged(node);
-            }
-        };
-        
-        _nodePropertyHandlers[node] = handler;
-        node.PropertyChanged += handler;
-    }
-    
-    private void UnsubscribeFromAllNodes()
-    {
-        foreach (var kvp in _nodePropertyHandlers)
-        {
-            kvp.Key.PropertyChanged -= kvp.Value;
-        }
-        _nodePropertyHandlers.Clear();
+        _selectionManagementService.SubscribeToNodeSelectionChanges(node);
     }
     
     private bool _disposed = false;
@@ -373,8 +236,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
             // Unsubscribe from SelectedNodes collection changes
             SelectedNodes.CollectionChanged -= OnSelectedNodesCollectionChanged;
         
-            // Unsubscribe from all node property changes
-            UnsubscribeFromAllNodes();
+            // Unsubscribe from selection management service events
+            if (_selectionChangedHandler != null)
+            {
+                _selectionManagementService.OnNodePropertyChanged -= _selectionChangedHandler;
+            }
+        
+            // Dispose selection management service
+            _selectionManagementService.Dispose();
         }
         _disposed = true;
     }

@@ -36,6 +36,7 @@ public static class DependencyInjection
         
         collection.AddSingleton<IContextMenuService, TreeGridContextMenuService>();
         collection.AddSingleton<ICommandService, CommandService>();
+        collection.AddSingleton<ISelectionManagementService, SelectionManagementService>();
         
         collection.AddSingleton<IScanWorkflowService, ScanWorkflowService>();
         collection.AddSingleton<INavigationService, NavigationService>();
