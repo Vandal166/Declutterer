@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -22,12 +21,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     private bool _isAnyNodeLoading = false; // used for showing loading indicator on the UI
     
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsTreeDataGridVisible))] // if NoChildrenFound changes, we also want to notify that IsTreeDataGridVisible has changed since it depends on NoChildrenFound
     private bool _noChildrenFound = false; // flag to indicate that no children were found for the selected directories based on the scan options
     
     [ObservableProperty]
     private string _selectedNodesSizeText = string.Empty; // a user-friendly string representation of the total size of the currently selected nodes
     
     public bool IsExpandingAll { get; private set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
+
+    public bool IsTreeDataGridVisible => Roots.Count > 0 && !NoChildrenFound; // The TreeDataGrid is visible if there are roots to display and we didn't just find that there are no children based on the scan options
     
     private readonly IContextMenuService _contextMenuService;
     private readonly ICommandService _commandService;
@@ -41,7 +43,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     private ScanOptions? _currentScanOptions;
     
     // an collection of root TreeNodes representing the top-level directories added by the user
-    // TreeDataGrid will automatically handle hierarchical display using the Children collection
     public ObservableCollection<TreeNode> Roots { get; } = new();
     
     public ObservableHashSet<TreeNode> SelectedNodes { get; } = new(); // the currently selected nodes in the TreeDataGrid
@@ -59,6 +60,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
 
         // selection change tracking
         SelectedNodes.CollectionChanged += OnSelectedNodesCollectionChanged;
+        
+        // root collection tracking to notify about IsTreeDataGridVisible changes
+        Roots.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsTreeDataGridVisible));
         
         // sub to selection changes on all nodes to keep SelectedNodes collection in sync
         _selectionChangedHandler = (node, args) =>
@@ -129,7 +133,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
             try
             {
                 bool scanSucceeded = await _scanWorkflowService.ExecuteScanAsync(result, Roots);
-                NoChildrenFound = !scanSucceeded;
+                NoChildrenFound = !scanSucceeded; // if scan failed or all roots have no children then set NoChildrenFound to true
             }
             finally
             {

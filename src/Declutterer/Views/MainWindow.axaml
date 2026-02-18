@@ -69,7 +69,42 @@
                         Text="Declutterer" />
                 </StackPanel>
 
-                <Separator Background="#CCCCCC" Height="1" />
+                <!--  GitHub Profile Button  -->
+                <StackPanel Orientation="Vertical" Spacing="40">
+                    <HyperlinkButton
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Foreground="#333333"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Margin="10,0"
+                        NavigateUri="https://github.com/Vandal166"
+                        Padding="0">
+                        <StackPanel
+                            Orientation="Horizontal"
+                            Spacing="10"
+                            VerticalAlignment="Center">
+                            <Path
+                                Data="M7.5,1C3.36,1,0,4.36,0,8.5c0,3.32,2.14,6.13,5.11,7.13c0.37,0.07,0.51,-0.16,0.51,-0.36c0,-0.18,-0.01,-0.77,-0.01,-1.39c-2.08,0.45,-2.52,-0.5,-2.68,-0.96c-0.08,-0.21,-0.42,-0.96,-0.72,-1.15c-0.25,-0.14,-0.6,-0.48,-0.01,-0.49c0.56,-0.01,0.96,0.52,1.09,0.74c0.64,1.08,1.67,0.77,2.08,0.59c0.07,-0.46,0.25,-0.77,0.45,-0.95c-1.66,-0.19,-3.41,-0.83,-3.41,-3.7c0,-0.82,0.29,-1.49,0.77,-2.01c-0.08,-0.19,-0.34,-0.97,0.07,-2.02c0,0,0.63,-0.2,2.07,0.77c0.6,-0.17,1.24,-0.25,1.88,-0.25c0.64,0,1.28,0.09,1.88,0.25c1.44,-0.97,2.07,-0.77,2.07,-0.77c0.41,1.05,0.15,1.83,0.07,2.02c0.48,0.52,0.77,1.19,0.77,2.01c0,2.87,-1.75,3.51,-3.41,3.7c0.26,0.22,0.49,0.65,0.49,1.31c0,0.95,-0.01,1.71,-0.01,1.94c0,0.2,0.14,0.43,0.51,0.36C12.86,14.63,15,11.82,15,8.5C15,4.36,11.64,1,7.5,1z"
+                                Fill="#333333"
+                                Height="22"
+                                Stretch="Uniform"
+                                VerticalAlignment="Center"
+                                Width="22" />
+                            <TextBlock
+                                FontStyle="Normal"
+                                Padding="0"
+                                Text="Author"
+                                TextDecorations="{x:Null}"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </HyperlinkButton>
+                </StackPanel>
+
+                <Separator
+                    Background="#CCCCCC"
+                    Height="1"
+                    Margin="0" />
 
                 <!--  Navigation Buttons  -->
                 <StackPanel Orientation="Vertical" Spacing="8">
@@ -205,7 +240,7 @@
             <TreeDataGrid
                 Foreground="{Binding IsAnyNodeLoading, Converter={StaticResource BooleanToBrushConverter}}"
                 Grid.Row="0"
-                IsVisible="{Binding Roots.Count, Converter={StaticResource GreaterThanZeroToBooleanConverter}}"
+                IsVisible="{Binding IsTreeDataGridVisible}"
                 Margin="0"
                 Source="{Binding Roots}"
                 x:Name="TreeDataGrid" />

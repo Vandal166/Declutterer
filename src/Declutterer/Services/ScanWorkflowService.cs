@@ -22,12 +22,11 @@ public sealed class ScanWorkflowService : IScanWorkflowService
         _dispatcher = dispatcher;
     }
 
+    /// <returns>true if at least one valid root was added and scanned, false if no valid roots were found or all roots had no children</returns>
     public async Task<bool> ExecuteScanAsync(ScanOptions scanOptions, ObservableCollection<TreeNode> roots)
     {
-        // Clear caches
         _iconLoadingService.ClearLoadedPathsCache();
 
-        // Clear and prepare roots collection
         roots.Clear();
 
         var validRoots = new List<TreeNode>();
