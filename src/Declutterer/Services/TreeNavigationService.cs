@@ -84,11 +84,8 @@ public sealed class TreeNavigationService : ITreeNavigationService
                 }
             });
             
-            // Yield to UI thread after each batch if there are more items to process
-            if (batchEnd < node.Children.Count)
-            {
-                await _dispatcher.InvokeAsync(() => { });
-            }
+            // Yield to UI thread after each batch to allow message pump to process updates
+            await _dispatcher.InvokeAsync(() => { });
         }
         
         // Process all child directories recursively in parallel
@@ -114,7 +111,7 @@ public sealed class TreeNavigationService : ITreeNavigationService
                 
                 await Task.WhenAll(tasks);
                 
-                // Yield to UI thread after each batch (empty lambda ensures UI message pump processes pending updates)
+                // Yield to UI thread after each batch to allow message pump to process updates
                 await _dispatcher.InvokeAsync(() => { });
             }
         }
