@@ -13,6 +13,11 @@ public sealed class TreeNavigationService : ITreeNavigationService
     private readonly DirectoryScanService _directoryScanService;
     private readonly IDispatcher _dispatcher;
     private readonly IScanWorkflowService _scanWorkflowService;
+    
+    // Batch size for expansion operations to balance UI responsiveness with performance.
+    // This value limits concurrent operations that schedule work on the UI thread,
+    // preventing the dispatcher queue from being overwhelmed during Alt+Click expansion.
+    private const int ExpansionBatchSize = 20;
 
     public TreeNavigationService(DirectoryScanService directoryScanService, IDispatcher dispatcher, IScanWorkflowService scanWorkflowService)
     {
@@ -50,8 +55,6 @@ public sealed class TreeNavigationService : ITreeNavigationService
             throw;
         }
     }
-    //TODO: problem, after expanding a node with Alt+Click, where the node is deeply nessted/large, visually some children won't be expanded at all
-    // however their state(IsExpanded) will be set to true, and the moment I start to <SCROLL OR toggle their checkbox state OR manually expand> the ui suddenly updates and expands all those nodes that were supposed to be expanded
     public async Task ToggleAllDescendantsAsync(TreeNode node, bool shouldExpand, bool isRoot = false, ScanOptions? currentScanOptions = null)
     {
         // Load children if not already loaded
@@ -68,9 +71,21 @@ public sealed class TreeNavigationService : ITreeNavigationService
             }
         }
         
-        foreach (var child in node.Children)
+        // Set expansion state for all children on the UI thread
+        // Process in batches to avoid blocking the UI thread when there are many children
+        for (int i = 0; i < node.Children.Count; i += ExpansionBatchSize)
         {
-            child.IsExpanded = shouldExpand;
+            int batchEnd = Math.Min(i + ExpansionBatchSize, node.Children.Count);
+            await _dispatcher.InvokeAsync(() =>
+            {
+                for (int j = i; j < batchEnd; j++)
+                {
+                    node.Children[j].IsExpanded = shouldExpand;
+                }
+            });
+            
+            // Yield control to allow the dispatcher to process queued messages and update the UI
+            await _dispatcher.InvokeAsync(() => { });
         }
         
         // Process all child directories recursively in parallel
@@ -81,19 +96,34 @@ public sealed class TreeNavigationService : ITreeNavigationService
 
         if (directoryChildren.Count > 0)
         {
-            // Process all directory children concurrently
-            var tasks = directoryChildren
-                .Select(child => ToggleAllDescendantsAsync(child, shouldExpand, isRoot: false, currentScanOptions))
-                .ToList();
-            
-            await Task.WhenAll(tasks);
+            // Process directory children in smaller batches to allow UI updates
+            // This prevents the UI thread from being overwhelmed with property changes
+            for (int batchStartIndex = 0; batchStartIndex < directoryChildren.Count; batchStartIndex += ExpansionBatchSize)
+            {
+                int batchItemCount = Math.Min(ExpansionBatchSize, directoryChildren.Count - batchStartIndex);
+                var tasks = new List<Task>(batchItemCount);
+                
+                for (int i = 0; i < batchItemCount; i++)
+                {
+                    var child = directoryChildren[batchStartIndex + i];
+                    tasks.Add(ToggleAllDescendantsAsync(child, shouldExpand, isRoot: false, currentScanOptions));
+                }
+                
+                await Task.WhenAll(tasks);
+                
+                // Yield control to allow the dispatcher to process queued messages and update the UI
+                await _dispatcher.InvokeAsync(() => { });
+            }
         }
         
         // Only set expansion state for this node if it's NOT the root of the Alt+Click
         // The TreeDataGrid handles the root node's toggle via normal click processing
         if (!isRoot)
         {
-            node.IsExpanded = shouldExpand;
+            await _dispatcher.InvokeAsync(() =>
+            {
+                node.IsExpanded = shouldExpand;
+            });
         }
     }
 
