@@ -72,14 +72,24 @@ public sealed class TreeNavigationService : ITreeNavigationService
         }
         
         // Set expansion state for all children on the UI thread
-        // This ensures the TreeDataGrid receives property change notifications
-        await _dispatcher.InvokeAsync(() =>
+        // Process in batches to avoid blocking the UI thread when there are many children
+        for (int i = 0; i < node.Children.Count; i += ExpansionBatchSize)
         {
-            foreach (var child in node.Children)
+            int batchEnd = Math.Min(i + ExpansionBatchSize, node.Children.Count);
+            await _dispatcher.InvokeAsync(() =>
             {
-                child.IsExpanded = shouldExpand;
+                for (int j = i; j < batchEnd; j++)
+                {
+                    node.Children[j].IsExpanded = shouldExpand;
+                }
+            });
+            
+            // Yield to UI thread after each batch if there are more items to process
+            if (batchEnd < node.Children.Count)
+            {
+                await _dispatcher.InvokeAsync(() => { });
             }
-        });
+        }
         
         // Process all child directories recursively in parallel
         var directoryChildren = node.Children
@@ -93,10 +103,10 @@ public sealed class TreeNavigationService : ITreeNavigationService
             // This prevents the UI thread from being overwhelmed with property changes
             for (int batchStartIndex = 0; batchStartIndex < directoryChildren.Count; batchStartIndex += ExpansionBatchSize)
             {
-                int currentBatchSize = Math.Min(ExpansionBatchSize, directoryChildren.Count - batchStartIndex);
-                var tasks = new List<Task>(currentBatchSize);
+                int batchItemCount = Math.Min(ExpansionBatchSize, directoryChildren.Count - batchStartIndex);
+                var tasks = new List<Task>(batchItemCount);
                 
-                for (int i = 0; i < currentBatchSize; i++)
+                for (int i = 0; i < batchItemCount; i++)
                 {
                     var child = directoryChildren[batchStartIndex + i];
                     tasks.Add(ToggleAllDescendantsAsync(child, shouldExpand, isRoot: false, currentScanOptions));
