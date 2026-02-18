@@ -87,14 +87,14 @@ public sealed class TreeNavigationService : ITreeNavigationService
             // Process directory children in smaller batches to allow UI updates
             // This prevents the UI thread from being overwhelmed with property changes
             const int batchSize = 20;
-            for (int i = 0; i < directoryChildren.Count; i += batchSize)
+            for (int batchStartIndex = 0; batchStartIndex < directoryChildren.Count; batchStartIndex += batchSize)
             {
-                var batch = directoryChildren.Skip(i).Take(batchSize).ToList();
+                var batch = directoryChildren.Skip(batchStartIndex).Take(batchSize).ToList();
                 var tasks = batch.Select(child => ToggleAllDescendantsAsync(child, shouldExpand, isRoot: false, currentScanOptions));
                 await Task.WhenAll(tasks);
                 
-                // Yield to UI thread after each batch to allow rendering
-                await Task.Yield();
+                // Yield to UI thread after each batch to allow rendering and processing property change notifications
+                await _dispatcher.InvokeAsync(() => { });
             }
         }
         
