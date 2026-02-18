@@ -23,6 +23,9 @@ public partial class TreeNode : ObservableObject
 
     public string SizeFormatted => ByteConverter.ToReadableString(Size);
     
+    // Helper method to determine if text should be bold based on size (GB+)
+    public bool IsSizeBold => Size >= 1024 * 1024 * 1024; // 1 GB
+    
     [ObservableProperty]
     private DateTime? _lastModified;
 

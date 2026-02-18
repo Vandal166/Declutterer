@@ -14,6 +14,61 @@
         <Setter Property="Cursor" Value="Hand" />
     </Style>
 
+    <!--  RadioButton - Remove Focus Ring and Customize  -->
+    <Style Selector="RadioButton">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Background="Transparent"
+                    Cursor="Hand"
+                    Padding="{TemplateBinding Padding}">
+                    <Grid Background="Transparent" ColumnDefinitions="Auto,*">
+                        <Border
+                            Background="White"
+                            BorderBrush="#D0D0D0"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Grid.Column="0"
+                            Height="20"
+                            VerticalAlignment="Center"
+                            Width="20"
+                            x:Name="border">
+                            <Ellipse
+                                Fill="#1E40AF"
+                                Height="12"
+                                HorizontalAlignment="Center"
+                                IsVisible="False"
+                                VerticalAlignment="Center"
+                                Width="12"
+                                x:Name="check" />
+                        </Border>
+                        <ContentPresenter
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Grid.Column="1"
+                            Margin="8,0,0,0"
+                            VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="RadioButton:checked /template/ Ellipse#check">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="RadioButton:pointerover /template/ Border#border">
+        <Setter Property="Background" Value="#E8F0FF" />
+        <Setter Property="BorderBrush" Value="#4A90E2" />
+    </Style>
+
+    <Style Selector="RadioButton:pointerover /template/ Border">
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
     <Style Selector="HeaderedContentControl.indented">
         <Setter Property="Template">
             <ControlTemplate>

@@ -20,6 +20,8 @@
             <converters:ZeroToBooleanConverter x:Key="ZeroToBooleanConverter" />
             <converters:BooleanToBrushConverter x:Key="BooleanToBrushConverter" />
             <converters:PathMiddleEllipsisConverter x:Key="PathMiddleEllipsisConverter" />
+            <converters:SizeToBrushConverter x:Key="SizeToBrushConverter" />
+            <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter" />
 
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://LoadingIndicators.Avalonia/LoadingIndicators.axaml" />

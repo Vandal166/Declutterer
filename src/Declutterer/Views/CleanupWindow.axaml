@@ -116,7 +116,8 @@
                                                         Text="{Binding FullPath, Converter={StaticResource PathMiddleEllipsisConverter}, ConverterParameter=140}" />
                                                     <TextBlock
                                                         FontSize="10"
-                                                        Foreground="Gray"
+                                                        FontWeight="{Binding IsSizeBold, Converter={StaticResource BoolToFontWeightConverter}}"
+                                                        Foreground="{Binding Size, Converter={StaticResource SizeToBrushConverter}}"
                                                         Text="{Binding SizeFormatted}" />
                                                 </StackPanel>
                                                 <!--  Remove button  -->
@@ -189,7 +190,8 @@
                                                         Text="{Binding FullPath, Converter={StaticResource PathMiddleEllipsisConverter}, ConverterParameter=140}" />
                                                     <TextBlock
                                                         FontSize="10"
-                                                        Foreground="Gray"
+                                                        FontWeight="{Binding IsSizeBold, Converter={StaticResource BoolToFontWeightConverter}}"
+                                                        Foreground="{Binding Size, Converter={StaticResource SizeToBrushConverter}}"
                                                         Text="{Binding SizeFormatted}" />
                                                 </StackPanel>
                                                 <!--  Remove button  -->
@@ -262,7 +264,8 @@
                                                         Text="{Binding FullPath, Converter={StaticResource PathMiddleEllipsisConverter}, ConverterParameter=140}" />
                                                     <TextBlock
                                                         FontSize="10"
-                                                        Foreground="Gray"
+                                                        FontWeight="{Binding IsSizeBold, Converter={StaticResource BoolToFontWeightConverter}}"
+                                                        Foreground="{Binding Size, Converter={StaticResource SizeToBrushConverter}}"
                                                         Text="{Binding SizeFormatted}" />
                                                 </StackPanel>
                                                 <!--  Remove button  -->
@@ -335,7 +338,8 @@
                                                         Text="{Binding FullPath, Converter={StaticResource PathMiddleEllipsisConverter}, ConverterParameter=140}" />
                                                     <TextBlock
                                                         FontSize="10"
-                                                        Foreground="Gray"
+                                                        FontWeight="{Binding IsSizeBold, Converter={StaticResource BoolToFontWeightConverter}}"
+                                                        Foreground="{Binding Size, Converter={StaticResource SizeToBrushConverter}}"
                                                         Text="{Binding SizeFormatted}" />
                                                 </StackPanel>
                                                 <!--  Remove button  -->

@@ -37,6 +37,7 @@
                 IsCancel="True"
                 MinWidth="80" />
             <Button
+                Background="CornflowerBlue"
                 Command="{Binding ScanCommand}"
                 Content="Scan"
                 IsDefault="True"

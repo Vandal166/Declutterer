@@ -4,6 +4,8 @@ using Avalonia.Controls.Models.TreeDataGrid;
 using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
+using CommunityToolkit.Mvvm.Input;
+using Declutterer.Converters;
 using Declutterer.Models;
 using Declutterer.ViewModels;
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
@@ -92,10 +94,40 @@ public static class TreeDataGridSourceFactory
                     x => x.Children,
                     x => x.HasChildren,
                     x => x.IsExpanded),
-                new TextColumn<TreeNode, string>("Size", x => x.SizeFormatted,
-                    options: new TextColumnOptions<TreeNode>
+                new TemplateColumn<TreeNode>("Size",
+                    new FuncDataTemplate<TreeNode>((node, _) =>
                     {
-                        TextAlignment = TextAlignment.Right,
+                        if (node is null)
+                            return null;
+
+                        var sizeConverter = new SizeToBrushConverter();
+                        var brush = sizeConverter.Convert(node.Size, typeof(SolidColorBrush), null, null);
+
+                        var textBlock = new TextBlock
+                        {
+                            VerticalAlignment = VerticalAlignment.Center,
+                            TextAlignment = TextAlignment.Right,
+                            Foreground = brush as SolidColorBrush ?? new SolidColorBrush(Colors.Black),
+                            FontWeight = node.IsSizeBold ? FontWeight.Bold : FontWeight.Normal,
+                        };
+
+                        // Bind to Size property so it updates when size changes
+                        textBlock.Bind(TextBlock.TextProperty, new Avalonia.Data.Binding("SizeFormatted") { Source = node });
+                        textBlock.Bind(TextBlock.ForegroundProperty, new Avalonia.Data.Binding("Size")
+                        {
+                            Source = node,
+                            Converter = sizeConverter
+                        });
+                        textBlock.Bind(TextBlock.FontWeightProperty, new Avalonia.Data.Binding("IsSizeBold")
+                        {
+                            Source = node,
+                            Converter = new BoolToFontWeightConverter()
+                        });
+
+                        return textBlock;
+                    }, supportsRecycling: false),
+                    options: new TemplateColumnOptions<TreeNode>
+                    {
                         CanUserResizeColumn = true,
                         CanUserSortColumn = true,
                         CompareAscending = (a, b) => a?.Size.CompareTo(b?.Size ?? 0) ?? 0,

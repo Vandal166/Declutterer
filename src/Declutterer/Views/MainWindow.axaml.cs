@@ -7,6 +7,8 @@ using Declutterer.Services;
 
 namespace Declutterer.Views;
 
+//TODO: separate view that will display an pie chart showing: "Images (2GB), Videos (10GB), Documents (500MB)."
+
 public partial class MainWindow : Window
 {
     private readonly TreeGridInteractionService _interactionService;
