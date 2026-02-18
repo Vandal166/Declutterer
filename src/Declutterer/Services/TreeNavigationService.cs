@@ -14,9 +14,9 @@ public sealed class TreeNavigationService : ITreeNavigationService
     private readonly IDispatcher _dispatcher;
     private readonly IScanWorkflowService _scanWorkflowService;
     
-    // Batch size for parallel directory expansion operations.
-    // This value balances UI responsiveness with performance by limiting concurrent operations
-    // that schedule work on the UI thread, preventing the dispatcher queue from being overwhelmed.
+    // Batch size for expansion operations to balance UI responsiveness with performance.
+    // This value limits concurrent operations that schedule work on the UI thread,
+    // preventing the dispatcher queue from being overwhelmed during Alt+Click expansion.
     private const int ExpansionBatchSize = 20;
 
     public TreeNavigationService(DirectoryScanService directoryScanService, IDispatcher dispatcher, IScanWorkflowService scanWorkflowService)
@@ -84,7 +84,7 @@ public sealed class TreeNavigationService : ITreeNavigationService
                 }
             });
             
-            // Yield to UI thread after each batch to allow message pump to process updates
+            // Yield control to allow the dispatcher to process queued messages and update the UI
             await _dispatcher.InvokeAsync(() => { });
         }
         
@@ -111,7 +111,7 @@ public sealed class TreeNavigationService : ITreeNavigationService
                 
                 await Task.WhenAll(tasks);
                 
-                // Yield to UI thread after each batch to allow message pump to process updates
+                // Yield control to allow the dispatcher to process queued messages and update the UI
                 await _dispatcher.InvokeAsync(() => { });
             }
         }
