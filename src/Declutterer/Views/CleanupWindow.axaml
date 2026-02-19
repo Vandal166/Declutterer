@@ -19,7 +19,7 @@
     </Design.DataContext>
 
     <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto">
-        <!--  Summary Section - The Big Win  -->
+        <!--  Summary Section  -->
         <Border
             Background="#F0F8FF"
             BorderBrush="#4A90E2"
@@ -131,6 +131,7 @@
                                                     FontWeight="Bold"
                                                     Foreground="#DC143C"
                                                     Grid.Column="2"
+                                                    IsEnabled="{Binding $parent[Window].DataContext.CanDelete}"
                                                     Margin="10,0,0,0"
                                                     ToolTip.Tip="Remove from cleanup" />
                                             </Grid>
@@ -205,6 +206,7 @@
                                                     FontWeight="Bold"
                                                     Foreground="#DC143C"
                                                     Grid.Column="2"
+                                                    IsEnabled="{Binding $parent[Window].DataContext.CanDelete}"
                                                     Margin="10,0,0,0"
                                                     ToolTip.Tip="Remove from cleanup" />
                                             </Grid>
@@ -279,6 +281,7 @@
                                                     FontWeight="Bold"
                                                     Foreground="#DC143C"
                                                     Grid.Column="2"
+                                                    IsEnabled="{Binding $parent[Window].DataContext.CanDelete}"
                                                     Margin="10,0,0,0"
                                                     ToolTip.Tip="Remove from cleanup" />
                                             </Grid>
@@ -353,6 +356,7 @@
                                                     FontWeight="Bold"
                                                     Foreground="#DC143C"
                                                     Grid.Column="2"
+                                                    IsEnabled="{Binding $parent[Window].DataContext.CanDelete}"
                                                     Margin="10,0,0,0"
                                                     ToolTip.Tip="Remove from cleanup" />
                                             </Grid>
@@ -405,6 +409,7 @@
             BorderBrush="#FFD700"
             BorderThickness="1"
             Grid.Row="3"
+            IsVisible="{Binding CanDelete}"
             Margin="10,5,10,10"
             Padding="20,10">
             <StackPanel Orientation="Vertical" Spacing="8">
@@ -422,7 +427,7 @@
                     CornerRadius="4"
                     Padding="5">
                     <RadioButton
-                        Content="Send to Recycle Bin (safer)"
+                        Content="Send to Recycle Bin"
                         FontWeight="Bold"
                         Foreground="#2D5A2D"
                         GroupName="DeleteMethod"
@@ -437,7 +442,7 @@
                     CornerRadius="4"
                     Padding="5">
                     <RadioButton
-                        Content="Permanent Delete (cannot be undone)"
+                        Content="Permanent Delete"
                         FontWeight="Bold"
                         Foreground="#B22222"
                         GroupName="DeleteMethod"
@@ -489,6 +494,7 @@
             Grid.Row="5"
             Margin="20,10">
             <Button
+                Command="{Binding CancelCommand}"
                 Content="Cancel"
                 Grid.Column="1"
                 HorizontalAlignment="Right"
@@ -496,12 +502,24 @@
                 Margin="0,0,10,0"
                 Padding="20,10" />
             <Button
-                Background="#DC143C"
+                Background="Red"
+                Command="{Binding DeleteCommand}"
                 Content="Delete..."
                 Foreground="White"
                 Grid.Column="2"
                 HorizontalAlignment="Right"
                 IsEnabled="{Binding CanDelete}"
+                IsVisible="{Binding !IsDeletionInProgress}"
+                Padding="20,10" />
+            <Button
+                Background="CornflowerBlue"
+                Command="{Binding CancelDeletionCommand}"
+                Content="Cancel Deletion"
+                Foreground="White"
+                Grid.Column="2"
+                HorizontalAlignment="Right"
+                IsEnabled="{Binding CanCancelDeletion}"
+                IsVisible="{Binding IsDeletionInProgress}"
                 Padding="20,10" />
         </Grid>
     </Grid>

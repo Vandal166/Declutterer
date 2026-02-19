@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
@@ -22,6 +23,10 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
     
     private readonly IExplorerLauncher _explorerLauncher;
     private readonly IErrorDialogService _errorDialogService;
+    private readonly IConfirmationDialogService _confirmationDialogService;
+    private readonly IDeleteService _deleteService;
+    
+    private CancellationTokenSource? _deletionCancellationTokenSource;
     
     [ObservableProperty]
     private ObservableCollection<TreeNode> _itemsToDelete = new();
@@ -57,8 +62,13 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
     private string _totalSizeFormatted = "0 B";
     
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanDelete))]
     private bool _isDeletionInProgress = false;
+    
+    [ObservableProperty]
+    private bool _isCancellationRequested = false;
+    
+    [ObservableProperty]
+    private bool _canCancelDeletion = false;
     
     [ObservableProperty]
     private double _deletionProgress = 0; // 0 to 100
@@ -74,11 +84,15 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
     [ObservableProperty]
     private bool _canDelete;
     
-    public CleanupWindowViewModel(ObservableCollection<TreeNode> itemsToDelete, IExplorerLauncher explorerLauncher, IErrorDialogService errorDialogService)
+    public event Action? RequestClose;
+    
+    public CleanupWindowViewModel(ObservableCollection<TreeNode> itemsToDelete, IExplorerLauncher explorerLauncher, IErrorDialogService errorDialogService, IConfirmationDialogService confirmationDialogService, IDeleteService deleteService)
     {
         _explorerLauncher = explorerLauncher;
         _errorDialogService = errorDialogService;
-        
+        _confirmationDialogService = confirmationDialogService;
+        _deleteService = deleteService;
+
         ItemsToDelete.CollectionChanged += ItemsToDeleteOnCollectionChanged;
         
         ItemsToDelete.Clear();
@@ -91,13 +105,225 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
         BuildGroupedItems();
     }
 
-    private void ItemsToDeleteOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    public CleanupWindowViewModel() { } // for designer
+
+    [RelayCommand]
+    private async Task Delete()
     {
-        CanDelete = ItemsToDelete.Count > 0;
+        if (SendToRecycleBin)
+        {
+            await MoveToRecycleBinAsync();
+        }
+        else
+        {
+            await DeletePermanentlyAsync();
+        }
+        //TODO somehwere refresh the TreeDataGrid after deletion completes, maybe via an event or callback
+    }
+    
+    [RelayCommand]
+    private void CancelDeletion()
+    {
+        if (_deletionCancellationTokenSource is not null && !_deletionCancellationTokenSource.IsCancellationRequested)
+        {
+            IsCancellationRequested = true;
+            _deletionCancellationTokenSource.Cancel();
+        }
+    }
+    
+    [RelayCommand]
+    private void OnCancel()    
+    {
+        ItemsToDelete.Clear();
+        RequestClose?.Invoke();
     }
 
-    public CleanupWindowViewModel() {} // for designer
-    
+    [RelayCommand]
+    private async Task MoveToRecycleBinAsync()
+    {
+        try
+        {
+            // Show confirmation dialog
+            var confirmationMessage = BuildConfirmationMessage("move to Recycle Bin");
+            var confirmed = await _confirmationDialogService.ShowConfirmationAsync(
+                "Confirm Deletion",
+                confirmationMessage);
+
+            if (!confirmed)
+                return;
+
+            // Create and store cancellation token source
+            _deletionCancellationTokenSource = new CancellationTokenSource();
+            IsCancellationRequested = false;
+
+            // Start deletion
+            IsDeletionInProgress = true;
+            DeletionProgress = 0;
+            DeletionStatus = "Preparing deletion...";
+
+            var moveToBinResult = await _deleteService.MoveToRecycleBinAsync(ItemsToDelete, new Progress<DeleteProgress>(progress =>
+            {
+                DeletionProgress = progress.ProgressPercentage;
+                DeletionStatus = $"Deleting: {progress.CurrentItemPath} ({progress.ProcessedItemCount}/{progress.TotalItemCount})";
+            }), _deletionCancellationTokenSource.Token);
+
+            // Show summary dialog
+            await ShowDeletionSummaryAsync(moveToBinResult);
+
+            // If deletion was successful, close the window
+            if (moveToBinResult.Success && ItemsToDelete.Count == 0)
+            {
+                RequestClose?.Invoke();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Information("Move to recycle bin operation was cancelled by user");
+            DeletionStatus = "Deletion cancelled.";
+            await Task.Delay(2000); // Show cancellation message briefly
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Error during move to recycle bin operation");
+            await _errorDialogService.ShowErrorAsync(
+                "Deletion Failed",
+                "An unexpected error occurred during deletion.",
+                e);
+        }
+        finally
+        {
+            IsDeletionInProgress = false;
+            IsCancellationRequested = false;
+            DeletionProgress = 0;
+            DeletionStatus = string.Empty;
+            _deletionCancellationTokenSource?.Dispose();
+            _deletionCancellationTokenSource = null;
+            CalculateTotalSize();
+            BuildGroupedItems();
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeletePermanentlyAsync()
+    {
+        try
+        {
+            // Show confirmation dialog with warning
+            var confirmationMessage = BuildConfirmationMessage("permanently delete (this cannot be undone)");
+            
+            var confirmed = await _confirmationDialogService.ShowConfirmationAsync(
+                "Confirm Permanent Deletion",
+                confirmationMessage);
+
+            if (!confirmed)
+                return;
+
+            // Create and store cancellation token source
+            _deletionCancellationTokenSource = new CancellationTokenSource();
+            IsCancellationRequested = false;
+
+            // Start deletion
+            IsDeletionInProgress = true;
+            DeletionProgress = 0;
+            DeletionStatus = "Preparing deletion...";
+            
+            var deleteResult = await _deleteService.DeletePermanentlyAsync(ItemsToDelete, new Progress<DeleteProgress>(progress =>
+            {
+                DeletionProgress = progress.ProgressPercentage;
+                DeletionStatus = $"Deleting: {progress.CurrentItemPath} ({progress.ProcessedItemCount}/{progress.TotalItemCount})";
+            }), _deletionCancellationTokenSource.Token);
+
+            // Show summary dialog
+            await ShowDeletionSummaryAsync(deleteResult);
+
+            // If deletion was successful, close the window
+            if (deleteResult.Success && ItemsToDelete.Count == 0)
+            {
+                RequestClose?.Invoke();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Information("Permanent delete operation was cancelled by user");
+            DeletionStatus = "Deletion cancelled.";
+            await Task.Delay(2000); // Show cancellation message briefly
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Error during permanent delete operation");
+            await _errorDialogService.ShowErrorAsync(
+                "Deletion Failed",
+                "An unexpected error occurred during deletion.",
+                e);
+        }
+        finally
+        {
+            IsDeletionInProgress = false;
+            IsCancellationRequested = false;
+            DeletionProgress = 0;
+            DeletionStatus = string.Empty;
+            _deletionCancellationTokenSource?.Dispose();
+            _deletionCancellationTokenSource = null;
+            CalculateTotalSize();
+            BuildGroupedItems();
+        }
+    }
+
+    /// <summary>
+    /// Builds a confirmation message showing the count of items and total size to be deleted.
+    /// </summary>
+    private string BuildConfirmationMessage(string action)
+    {
+        var itemCount = ItemsToDelete.Count;
+        var totalSize = TotalSizeFormatted;
+        
+        return $"You are about to {action}:\n\n" +
+               $"Items: {itemCount}\n" +
+               $"Total Size: {totalSize}\n\n" +
+               $"Are you sure you want to proceed?";
+    }
+
+    /// <summary>
+    /// Shows a summary dialog of the deletion result.
+    /// </summary>
+    private async Task ShowDeletionSummaryAsync(DeleteResult result)
+    {
+        var summary = new System.Text.StringBuilder();
+        summary.AppendLine("Deletion Complete\n");
+        summary.AppendLine($"Deleted Items: {result.DeletedCount}");
+        summary.AppendLine($"Failed Items: {result.FailedCount}");
+        summary.AppendLine($"Storage Freed: {ByteConverter.ToReadableString(result.TotalBytesFreed)}");
+
+        if (result.FailedCount > 0 && result.Errors.Count > 0)
+        {
+            summary.AppendLine("\nFailed Deletions:");
+            foreach (var error in result.Errors.Take(5)) // Show first 5 errors
+            {
+                summary.AppendLine($"• {System.IO.Path.GetFileName(error.ItemPath)}: {error.ErrorMessage}");
+            }
+
+            if (result.Errors.Count > 5)
+            {
+                summary.AppendLine($"... and {result.Errors.Count - 5} more errors");
+            }
+        }
+
+        var title = result.Success ? "Deletion Successful" : "Deletion Completed with Errors";
+        await _errorDialogService.ShowErrorAsync(title, summary.ToString());
+    }
+
+    private void UpdateCanDelete()
+    {
+        CanDelete = ItemsToDelete.Count > 0 && !IsDeletionInProgress;
+        CanCancelDeletion = IsDeletionInProgress && !IsCancellationRequested;
+    }
+
+    private void ItemsToDeleteOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => UpdateCanDelete();
+
+    partial void OnIsDeletionInProgressChanged(bool value) => UpdateCanDelete();
+
+    partial void OnIsCancellationRequestedChanged(bool value) => UpdateCanDelete();
+
     private void CalculateTotalSize()
     {
         // Filter to only top-level items (exclude items nested within other items)
@@ -179,6 +405,21 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
     
     public void SetTopLevel(TopLevel topLevel) => _topLevel = topLevel;
     
+    /// <summary>
+    /// Cleanup method to be called when the window is closing.
+    /// Cancels any in-progress deletion operation.
+    /// </summary>
+    public void OnWindowClosing()
+    {
+        // If deletion is in progress, cancel it
+        if (IsDeletionInProgress && _deletionCancellationTokenSource is not null && 
+            !_deletionCancellationTokenSource.IsCancellationRequested)
+        {
+            Log.Information("Window closing during deletion - cancelling deletion operation");
+            _deletionCancellationTokenSource.Cancel();
+        }
+    }
+    
     [RelayCommand]
     private void RemoveFromCleanup(TreeNode? item)
     {
@@ -202,7 +443,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
      {
          // For cleanup window, "select" means removing from cleanup or marking differently
          // For now, we'll just toggle it or you can adapt this as needed
-         if (node is not null)
+         if (node is not null && CanDelete)
          {
              RemoveFromCleanup(node);
          }

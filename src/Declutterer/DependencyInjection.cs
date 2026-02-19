@@ -33,6 +33,9 @@ public static class DependencyInjection
         
         collection.AddSingleton<IExplorerLauncher, WindowsExplorerLauncher>();
         collection.AddSingleton<IErrorDialogService, ErrorDialogService>();
+        collection.AddSingleton<IConfirmationDialogService, ConfirmationDialogService>();
+        collection.AddSingleton<IDeletionHistoryRepository, DeletionHistoryRepository>();
+        collection.AddSingleton<IDeleteService, DeleteService>();
         
         collection.AddSingleton<IContextMenuService, TreeGridContextMenuService>();
         collection.AddSingleton<ICommandService, CommandService>();

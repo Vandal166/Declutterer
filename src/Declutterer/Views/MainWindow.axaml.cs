@@ -1,5 +1,6 @@
 using System;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Declutterer.Abstractions;
 using Declutterer.Factories;
 using Declutterer.ViewModels;
@@ -7,19 +8,24 @@ using Declutterer.Services;
 
 namespace Declutterer.Views;
 
-//TODO: separate view that will display an pie chart showing: "Images (2GB), Videos (10GB), Documents (500MB)."
+//TODO: separate History view that will display an pie chart showing: "Images (2GB), Videos (10GB), Documents (500MB)."
 
 public partial class MainWindow : Window
 {
     private readonly TreeGridInteractionService _interactionService;
-    
-    public MainWindow(TreeGridInteractionService interactionService, INavigationService navigationService, IClipboardService clipboardService)
+    private readonly INavigationService _navigationService;
+    private readonly IErrorDialogService _errorDialogService;
+    public MainWindow(TreeGridInteractionService interactionService, INavigationService navigationService, IClipboardService clipboardService, IErrorDialogService errorDialogService)
     {
         InitializeComponent();
         
         _interactionService = interactionService;
 
-        navigationService.SetOwnerWindow(this);
+        _navigationService = navigationService;
+        _errorDialogService = errorDialogService;
+        
+        _navigationService.SetOwnerWindow(this);
+        _errorDialogService.SetOwnerWindow(this);
         
         // Initialize the clipboard service with the window's clipboard
         if (clipboardService is AvaloniaClipboardService avaloniaClipboardService)
@@ -43,11 +49,19 @@ public partial class MainWindow : Window
         }
     }
 
+
     protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
     {
         base.OnLoaded(e);
         if (DataContext is MainWindowViewModel viewModel)
         {
+            // Subscribe to cleanup window close event to reset error dialog service owner
+            viewModel.CleanupWindowClosed += (_, _) =>
+            {
+                _errorDialogService.SetOwnerWindow(this);
+                _navigationService.SetOwnerWindow(this);
+            };
+            
             // finding TreeDataGrid control and setting up the hierarchical data source for it
             var treeDataGrid = this.FindControl<TreeDataGrid>("TreeDataGrid");
             

@@ -1,5 +1,6 @@
 ﻿using System;
 using Avalonia.Controls;
+using Declutterer.Abstractions;
 using Declutterer.Services;
 using Declutterer.ViewModels;
 
@@ -7,9 +8,14 @@ namespace Declutterer.Views;
 
 public partial class CleanupWindow : Window
 {
-    public CleanupWindow()
+    private readonly IErrorDialogService _errorDialogService;
+    private readonly IConfirmationDialogService _confirmationDialogService;
+
+    public CleanupWindow(IErrorDialogService errorDialogService, IConfirmationDialogService confirmationDialogService)
     {
         InitializeComponent();
+        _errorDialogService = errorDialogService;
+        _confirmationDialogService = confirmationDialogService;
     }
     
     protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
@@ -20,8 +26,15 @@ public partial class CleanupWindow : Window
         {
             // Set up the ViewModel with the TopLevel for clipboard access
             viewModel.SetTopLevel(this);
+            
+            viewModel.RequestClose += Close;
+            
             // Init Shared interactions
             var controlInteractionService = new ControlInteractionService();
+            
+            // Initialize dialog services with this window as owner
+            _errorDialogService.SetOwnerWindow(this);
+            _confirmationDialogService.SetOwnerWindow(this);
 
             // Initialize handlers for Large Directories ListBox
             var largeDirectoriesListBox = this.FindControl<ListBox>("LargeDirectoriesListBox");
@@ -87,5 +100,24 @@ public partial class CleanupWindow : Window
                 controlInteractionService.InitializeContextMenuHandler(otherItemsListBox, viewModel);
             }
         }
+    }
+    
+    protected override void OnClosing(Avalonia.Controls.WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        
+        if (DataContext is CleanupWindowViewModel viewModel)
+        {
+            viewModel.OnWindowClosing();
+        }
+    }
+    
+    protected override void OnClosed(EventArgs e)
+    {
+        if(DataContext is CleanupWindowViewModel vm)
+        {
+            vm.RequestClose -= Close; // unsub
+        }
+        base.OnClosed(e);
     }
 }

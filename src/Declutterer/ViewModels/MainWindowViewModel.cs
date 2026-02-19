@@ -47,6 +47,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     
     public ObservableHashSet<TreeNode> SelectedNodes { get; } = new(); // the currently selected nodes in the TreeDataGrid
     
+    /// <summary>
+    /// Event raised when the cleanup window closes. Allows the view to perform cleanup operations.
+    /// </summary>
+    public event EventHandler? CleanupWindowClosed;
+    
     public MainWindowViewModel(INavigationService navigationService, IScanWorkflowService scanWorkflowService, ITreeNavigationService treeNavigationService,
         IContextMenuService contextMenuService, ICommandService commandService, IClipboardService clipboardService, ISelectionManagementService selectionManagementService)
     {
@@ -141,6 +146,19 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
             }
         }
     }
+    
+    [RelayCommand]
+    private async Task ShowCleanupWindowAsync()
+    {
+        if (SelectedNodes.Count == 0)
+            return;
+
+        await _navigationService.ShowCleanupWindowAsync(SelectedNodes);
+        
+        // Signal that cleanup window has closed
+        CleanupWindowClosed?.Invoke(this, EventArgs.Empty);
+    }
+    
     public async Task HandleAltClickExpandAsync(TreeNode node, bool shouldExpand)
     {
         IsAnyNodeLoading = true;
@@ -158,14 +176,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
             IsExpandingAll = false;
             IsAnyNodeLoading = false;
         }
-    }
-    [RelayCommand]
-    private async Task ShowCleanupWindowAsync()
-    {
-        if (SelectedNodes.Count == 0)
-            return;
-
-        await _navigationService.ShowCleanupWindowAsync(SelectedNodes);
     }
     
     [RelayCommand]

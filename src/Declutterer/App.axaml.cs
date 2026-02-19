@@ -45,7 +45,8 @@ public partial class App : Application
             // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
             // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             DisableAvaloniaDataAnnotationValidation();
-            var mainWindow = new MainWindow(serviceProvider.GetRequiredService<TreeGridInteractionService>(), serviceProvider.GetRequiredService<INavigationService>(), serviceProvider.GetRequiredService<IClipboardService>())
+            var mainWindow = new MainWindow(serviceProvider.GetRequiredService<TreeGridInteractionService>(), serviceProvider.GetRequiredService<INavigationService>(), 
+                serviceProvider.GetRequiredService<IClipboardService>(), serviceProvider.GetRequiredService<IErrorDialogService>())
             {
                 DataContext = serviceProvider.GetRequiredService<MainWindowViewModel>()
             };
