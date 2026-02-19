@@ -14,6 +14,7 @@ public static class DependencyInjection
         collection.AddSingleton<MainWindowViewModel>();
         collection.AddSingleton<ScanOptionsWindowViewModel>();
         collection.AddTransient<CleanupWindowViewModel>(); // Transient since each CleanupWindow gets a new instance with different selected nodes
+        collection.AddTransient<HistoryWindowViewModel>(); // Transient for each history window instance
         
         collection.AddLogging(builder => builder.AddSerilog());
         

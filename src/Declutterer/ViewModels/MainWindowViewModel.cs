@@ -27,6 +27,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     [ObservableProperty]
     private string _selectedNodesSizeText = string.Empty; // a user-friendly string representation of the total size of the currently selected nodes
     
+    [ObservableProperty]
+    private bool isHistoryVisible = false; // flag to show/hide the history view
+
+    [ObservableProperty]
+    private HistoryWindowViewModel _historyViewModel; // ViewModel for the history view
+    
     public bool IsExpandingAll { get; private set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
 
     public bool IsTreeDataGridVisible => Roots.Count > 0 && !NoChildrenFound; // The TreeDataGrid is visible if there are roots to display and we didn't just find that there are no children based on the scan options
@@ -53,7 +59,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     public event EventHandler? CleanupWindowClosed;
     
     public MainWindowViewModel(INavigationService navigationService, IScanWorkflowService scanWorkflowService, ITreeNavigationService treeNavigationService,
-        IContextMenuService contextMenuService, ICommandService commandService, IClipboardService clipboardService, ISelectionManagementService selectionManagementService)
+        IContextMenuService contextMenuService, ICommandService commandService, IClipboardService clipboardService, ISelectionManagementService selectionManagementService, HistoryWindowViewModel historyViewModel)
     {
         _navigationService = navigationService;
         _scanWorkflowService = scanWorkflowService;
@@ -62,6 +68,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         _commandService = commandService;
         _clipboardService = clipboardService;
         _selectionManagementService = selectionManagementService;
+        _historyViewModel = historyViewModel;
 
         // selection change tracking
         SelectedNodes.CollectionChanged += OnSelectedNodesCollectionChanged;
@@ -145,6 +152,22 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
                 IsAnyNodeLoading = false;
             }
         }
+    }
+
+    [RelayCommand]
+    private void ShowHistoryInline()
+    {
+        // Create history view model with callback to hide history
+        HistoryViewModel.SetHideHistoryCallback(HideHistoryInline);
+        IsHistoryVisible = true;
+    }
+
+    [RelayCommand]
+    private void HideHistoryInline()
+    {
+        // Hide the history view and return to main view
+        IsHistoryVisible = false;
+        //_historyViewModel = null;
     }
     
     [RelayCommand]

@@ -14,6 +14,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:sys="clr-namespace:System;assembly=mscorlib"
+    xmlns:views="using:Declutterer.Views"
     xmlns:vm="using:Declutterer.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
@@ -151,15 +152,15 @@
                     <Button
                         Background="Transparent"
                         BorderThickness="0"
-                        Foreground="#999999"
+                        Command="{Binding ShowHistoryInlineCommand}"
+                        Foreground="#333333"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Left"
-                        IsEnabled="False"
                         Padding="12,10">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Path
                                 Data="{StaticResource history_regular}"
-                                Fill="#999999"
+                                Fill="#333333"
                                 Height="15"
                                 Stretch="Uniform"
                                 VerticalAlignment="Center"
@@ -236,139 +237,147 @@
             Grid.Row="0"
             Margin="10">
 
-            <!--  TreeDataGrid with hierarchical display  -->
-            <TreeDataGrid
-                Foreground="{Binding IsAnyNodeLoading, Converter={StaticResource BooleanToBrushConverter}}"
-                Grid.Row="0"
-                IsVisible="{Binding IsTreeDataGridVisible}"
-                Margin="0"
-                Source="{Binding Roots}"
-                x:Name="TreeDataGrid" />
+            <!--  Main Scanner/Tree View  -->
+            <Panel IsVisible="{Binding !IsHistoryVisible}">
+                <!--  TreeDataGrid with hierarchical display  -->
+                <TreeDataGrid
+                    Foreground="{Binding IsAnyNodeLoading, Converter={StaticResource BooleanToBrushConverter}}"
+                    Grid.Row="0"
+                    IsVisible="{Binding IsTreeDataGridVisible}"
+                    Margin="0"
+                    Source="{Binding Roots}"
+                    x:Name="TreeDataGrid" />
 
-            <!--  No Children Found Message  -->
-            <StackPanel
-                HorizontalAlignment="Center"
-                IsVisible="{Binding NoChildrenFound}"
-                Orientation="Vertical"
-                Spacing="16"
-                VerticalAlignment="Center">
-
-                <!--  Icon  -->
-                <Path
-                    Data="{StaticResource folder_regular}"
-                    Fill="#FFA500"
-                    Stretch="Uniform"
-                    VerticalAlignment="Center"
-                    Width="64" />
-
-                <!--  Main Heading  -->
-                <TextBlock
-                    FontSize="24"
-                    FontWeight="SemiBold"
-                    Foreground="#333333"
-                    HorizontalAlignment="Center"
-                    Text="No matches found" />
-
-                <!--  Subtitle  -->
-                <TextBlock
-                    FontSize="13"
-                    Foreground="#666666"
-                    HorizontalAlignment="Center"
-                    Text="No files or folders matched your scan criteria."
-                    TextAlignment="Center" />
-
-                <TextBlock
-                    FontSize="13"
-                    Foreground="#666666"
-                    HorizontalAlignment="Center"
-                    Text="Try adjusting your filters and scanning again."
-                    TextAlignment="Center" />
-
-                <!--  Action Button  -->
-                <Button
-                    Background="CornflowerBlue"
-                    Command="{Binding ShowScanOptionsWindowCommand}"
-                    Content="Try Different Scan Settings"
-                    FontSize="14"
-                    HorizontalAlignment="Center"
-                    Padding="20,10,20,10" />
-            </StackPanel>
-
-            <!--  Empty State - Hero Action  -->
-            <StackPanel
-                HorizontalAlignment="Center"
-                IsVisible="{Binding Roots.Count, Converter={StaticResource ZeroToBooleanConverter}}"
-                Orientation="Vertical"
-                Spacing="20"
-                VerticalAlignment="Center">
-
-                <!--  Icon  -->
-                <Path
-                    Data="{StaticResource folder_open_regular}"
-                    Fill="Black"
-                    Stretch="Uniform"
-                    VerticalAlignment="Center"
-                    Width="72" />
-                <!--  Main Heading  -->
-                <TextBlock
-                    FontSize="28"
-                    FontWeight="SemiBold"
-                    Foreground="#333333"
-                    HorizontalAlignment="Center"
-                    Text="Ready to declutter?" />
-
-                <!--  Subtitle  -->
-                <TextBlock
-                    FontSize="14"
-                    Foreground="#666666"
-                    HorizontalAlignment="Center"
-                    Text="Select directories to scan and find unused files and folders"
-                    TextAlignment="Center" />
-
-                <!--  Hero Action Button  -->
-                <Button
-                    Background="CornflowerBlue"
-                    Command="{Binding ShowScanOptionsWindowCommand}"
-                    Content="Start New Scan"
-                    FontSize="16"
-                    HorizontalAlignment="Center"
-                    Padding="24,12,24,12" />
-
-                <!--  Quick Tips Section  -->
+                <!--  No Children Found Message  -->
                 <StackPanel
                     HorizontalAlignment="Center"
-                    Margin="0,20,0,0"
+                    IsVisible="{Binding NoChildrenFound}"
                     Orientation="Vertical"
-                    Spacing="8">
-                    <TextBlock
-                        FontSize="12"
-                        FontWeight="SemiBold"
-                        Foreground="#999999"
-                        Text="Quick Tips:" />
-                    <TextBlock
-                        FontSize="11"
-                        Foreground="#888888"
-                        Text="• Select one or more folders to analyze" />
-                    <TextBlock
-                        FontSize="11"
-                        Foreground="#888888"
-                        Text="• Filter by size, type, and age" />
-                    <TextBlock
-                        FontSize="11"
-                        Foreground="#888888"
-                        Text="• Review and safely delete unwanted entries" />
-                </StackPanel>
-            </StackPanel>
+                    Spacing="16"
+                    VerticalAlignment="Center">
 
-            <!--  Loading Spinner  -->
-            <avalonia:LoadingIndicator
-                Height="100"
-                HorizontalAlignment="Center"
-                IsActive="{Binding IsAnyNodeLoading}"
-                Mode="Arc"
-                SpeedRatio="1.2"
-                VerticalAlignment="Center"
-                Width="100" />
+                    <!--  Icon  -->
+                    <Path
+                        Data="{StaticResource folder_regular}"
+                        Fill="#FFA500"
+                        Stretch="Uniform"
+                        VerticalAlignment="Center"
+                        Width="64" />
+
+                    <!--  Main Heading  -->
+                    <TextBlock
+                        FontSize="24"
+                        FontWeight="SemiBold"
+                        Foreground="#333333"
+                        HorizontalAlignment="Center"
+                        Text="No matches found" />
+
+                    <!--  Subtitle  -->
+                    <TextBlock
+                        FontSize="13"
+                        Foreground="#666666"
+                        HorizontalAlignment="Center"
+                        Text="No files or folders matched your scan criteria."
+                        TextAlignment="Center" />
+
+                    <TextBlock
+                        FontSize="13"
+                        Foreground="#666666"
+                        HorizontalAlignment="Center"
+                        Text="Try adjusting your filters and scanning again."
+                        TextAlignment="Center" />
+
+                    <!--  Action Button  -->
+                    <Button
+                        Background="CornflowerBlue"
+                        Command="{Binding ShowScanOptionsWindowCommand}"
+                        Content="Try Different Scan Settings"
+                        FontSize="14"
+                        HorizontalAlignment="Center"
+                        Padding="20,10,20,10" />
+                </StackPanel>
+
+                <!--  Empty State - Hero Action  -->
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    IsVisible="{Binding Roots.Count, Converter={StaticResource ZeroToBooleanConverter}}"
+                    Orientation="Vertical"
+                    Spacing="20"
+                    VerticalAlignment="Center">
+
+                    <!--  Icon  -->
+                    <Path
+                        Data="{StaticResource folder_open_regular}"
+                        Fill="Black"
+                        Stretch="Uniform"
+                        VerticalAlignment="Center"
+                        Width="72" />
+                    <!--  Main Heading  -->
+                    <TextBlock
+                        FontSize="28"
+                        FontWeight="SemiBold"
+                        Foreground="#333333"
+                        HorizontalAlignment="Center"
+                        Text="Ready to declutter?" />
+
+                    <!--  Subtitle  -->
+                    <TextBlock
+                        FontSize="14"
+                        Foreground="#666666"
+                        HorizontalAlignment="Center"
+                        Text="Select directories to scan and find unused files and folders"
+                        TextAlignment="Center" />
+
+                    <!--  Hero Action Button  -->
+                    <Button
+                        Background="CornflowerBlue"
+                        Command="{Binding ShowScanOptionsWindowCommand}"
+                        Content="Start New Scan"
+                        FontSize="16"
+                        HorizontalAlignment="Center"
+                        Padding="24,12,24,12" />
+
+                    <!--  Quick Tips Section  -->
+                    <StackPanel
+                        HorizontalAlignment="Center"
+                        Margin="0,20,0,0"
+                        Orientation="Vertical"
+                        Spacing="8">
+                        <TextBlock
+                            FontSize="12"
+                            FontWeight="SemiBold"
+                            Foreground="#999999"
+                            Text="Quick Tips:" />
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="#888888"
+                            Text="• Select one or more folders to analyze" />
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="#888888"
+                            Text="• Filter by size, type, and age" />
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="#888888"
+                            Text="• Review and safely delete unwanted entries" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!--  Loading Spinner  -->
+                <avalonia:LoadingIndicator
+                    Height="100"
+                    HorizontalAlignment="Center"
+                    IsActive="{Binding IsAnyNodeLoading}"
+                    Mode="Arc"
+                    SpeedRatio="1.2"
+                    VerticalAlignment="Center"
+                    Width="100" />
+            </Panel>
+
+            <!--  History View  -->
+            <Panel IsVisible="{Binding IsHistoryVisible}">
+                <views:HistoryView DataContext="{Binding HistoryViewModel}" />
+            </Panel>
         </Grid>
 
         <!--  BOTTOM SELECTION SUMMARY BAR  -->

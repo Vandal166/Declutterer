@@ -15,14 +15,16 @@ public sealed class NavigationService : INavigationService
     private readonly IErrorDialogService _errorDialogService;
     private readonly IConfirmationDialogService _confirmationDialogService;
     private readonly IDeleteService _deleteService;
+    private readonly IDeletionHistoryRepository _deletionHistoryRepository;
     private Window? _ownerWindow;
 
-    public NavigationService(IExplorerLauncher explorerLauncher, IErrorDialogService errorDialogService, IConfirmationDialogService confirmationDialogService, IDeleteService deleteService)
+    public NavigationService(IExplorerLauncher explorerLauncher, IErrorDialogService errorDialogService, IConfirmationDialogService confirmationDialogService, IDeleteService deleteService, IDeletionHistoryRepository deletionHistoryRepository)
     {
         _explorerLauncher = explorerLauncher;
         _errorDialogService = errorDialogService;
         _confirmationDialogService = confirmationDialogService;
         _deleteService = deleteService;
+        _deletionHistoryRepository = deletionHistoryRepository;
     }
 
     public void SetOwnerWindow(Window window)

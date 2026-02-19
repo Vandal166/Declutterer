@@ -1,11 +1,13 @@
 ﻿using Avalonia.Controls;
+using Avalonia.VisualTree;
+using Declutterer.Abstractions;
 using Declutterer.ViewModels;
 
 namespace Declutterer.Views;
 
-public partial class HistoryWindow : Window
+public partial class HistoryView : UserControl
 {
-    public HistoryWindow()
+    public HistoryView()
     {
         InitializeComponent();
     }
@@ -16,15 +18,13 @@ public partial class HistoryWindow : Window
 
         if (DataContext is HistoryWindowViewModel viewModel)
         {
-            // Load history when the window is shown
+            // Load history when the view is shown
             _ = viewModel.LoadHistoryAsync();
-        }
-
-        // Hook up close button
-        var closeButton = this.FindControl<Button>("CloseButton");
-        if (closeButton != null)
-        {
-            closeButton.Click += (s, args) => Close();
+            var window = this.GetVisualRoot() as Window;
+            if (window != null)
+            {
+                viewModel.SetOwnerWindow(window);
+            }
         }
     }
 }

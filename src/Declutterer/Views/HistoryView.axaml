@@ -1,23 +1,14 @@
-﻿<Window
-    Height="700"
-    Icon="/Assets/avalonia-logo.ico"
-    Title="Deletion History"
-    Width="900"
-    WindowStartupLocation="CenterOwner"
-    d:DesignHeight="700"
-    d:DesignWidth="900"
+﻿<UserControl
+    d:DesignHeight="600"
+    d:DesignWidth="1200"
     mc:Ignorable="d"
-    x:Class="Declutterer.Views.HistoryWindow"
+    x:Class="Declutterer.Views.HistoryView"
     x:DataType="vm:HistoryWindowViewModel"
     xmlns="https://github.com/avaloniaui"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="using:Declutterer.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-
-    <Design.DataContext>
-        <vm:HistoryWindowViewModel />
-    </Design.DataContext>
 
     <Grid RowDefinitions="Auto,*,Auto">
         <!--  Header  -->
@@ -300,12 +291,13 @@
                 <Button
                     Background="CornflowerBlue"
                     BorderThickness="0"
-                    Content="Close"
+                    Command="{Binding HideHistoryCommand}"
+                    Content="Back"
                     Foreground="White"
                     Grid.Column="2"
-                    Name="CloseButton"
+                    Name="BackButton"
                     Padding="15,10" />
             </Grid>
         </Border>
     </Grid>
-</Window>
+</UserControl>
