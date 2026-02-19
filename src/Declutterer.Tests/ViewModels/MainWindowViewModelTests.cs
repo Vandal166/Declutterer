@@ -214,9 +214,7 @@ public class MainWindowViewModelTests
     {
         var viewModel = CreateViewModel();
         
+        // Should not throw any exception
         viewModel.Dispose();
-        
-        // No exception should be thrown
-        Assert.True(true);
     }
 }
