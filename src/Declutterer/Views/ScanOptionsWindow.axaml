@@ -1,6 +1,6 @@
 ﻿<Window
     Height="700"
-    Icon="/Assets/avalonia-logo.ico"
+    Icon="/Assets/favicon.ico"
     Title="Scan Options"
     Width="450"
     WindowStartupLocation="CenterScreen"
@@ -10,7 +10,6 @@
     x:Class="Declutterer.Views.ScanOptionsWindow"
     x:DataType="viewModels:ScanOptionsWindowViewModel"
     xmlns="https://github.com/avaloniaui"
-    xmlns:converters="clr-namespace:Declutterer.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:viewModels="clr-namespace:Declutterer.ViewModels"

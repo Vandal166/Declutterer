@@ -1,5 +1,6 @@
 ﻿<Window
     Height="850"
+    Icon="/Assets/favicon.ico"
     Title="Cleanup Review"
     Width="900"
     WindowStartupLocation="CenterScreen"

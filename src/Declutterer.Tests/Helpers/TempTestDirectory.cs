@@ -1,3 +1,5 @@
+using Serilog;
+
 namespace Declutterer.Tests.Helpers;
 
 /// <summary>
@@ -73,7 +75,7 @@ public class TempTestDirectory : IDisposable
             }
             catch
             {
-                // Best effort cleanup
+                Log.Warning($"Failed to delete temporary test directory: {Path}");
             }
         }
     }

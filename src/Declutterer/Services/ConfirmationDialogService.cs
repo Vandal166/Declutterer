@@ -40,6 +40,7 @@ public sealed class ConfirmationDialogService : IConfirmationDialogService
         var dialog = new Window
         {
             Title = title,
+            Icon = owner.Icon,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Width = 500,

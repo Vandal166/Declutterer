@@ -26,7 +26,7 @@ public class BytesToStringConverter : IValueConverter
             len = len / 1024;
         }
 
-        return $"{len:0.##} {sizes[order]}";
+        return string.Format(CultureInfo.InvariantCulture, "{0:0.##} {1}", len, sizes[order]);
     }
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

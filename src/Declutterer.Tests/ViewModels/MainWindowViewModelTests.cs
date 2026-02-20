@@ -14,7 +14,7 @@ public class MainWindowViewModelTests
     private readonly ICommandService _commandService;
     private readonly IClipboardService _clipboardService;
     private readonly ISelectionManagementService _selectionManagementService;
-
+    private readonly HistoryWindowViewModel _historyWindowViewModel;
     public MainWindowViewModelTests()
     {
         // Setup mocks for all dependencies
@@ -25,6 +25,7 @@ public class MainWindowViewModelTests
         _commandService = Substitute.For<ICommandService>();
         _clipboardService = Substitute.For<IClipboardService>();
         _selectionManagementService = Substitute.For<ISelectionManagementService>();
+        _historyWindowViewModel = new HistoryWindowViewModel();
     }
 
     private MainWindowViewModel CreateViewModel()
@@ -36,7 +37,8 @@ public class MainWindowViewModelTests
             _contextMenuService,
             _commandService,
             _clipboardService,
-            _selectionManagementService
+            _selectionManagementService,
+            _historyWindowViewModel
         );
     }
 

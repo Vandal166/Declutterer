@@ -20,24 +20,27 @@ namespace Declutterer.ViewModels;
 public sealed partial class HistoryWindowViewModel : ViewModelBase
 {
     [ObservableProperty]
-    private ObservableCollection<HistoryEntryGroupViewModel> groupedEntries = new();
+    private ObservableCollection<HistoryEntryGroupViewModel> _groupedEntries = new();
 
     [ObservableProperty]
-    private bool isLoading = false;
+    private bool _isLoading = false;
 
     [ObservableProperty]
-    private bool hasEntries = false;
+    private bool _hasEntries = false;
 
     [ObservableProperty]
-    private int totalEntryCount = 0;
+    private int _totalEntryCount = 0;
 
     [ObservableProperty]
-    private long totalDeletedSizeBytes = 0;
+    private long _totalDeletedSizeBytes = 0;
+
+    [ObservableProperty]
+    private string _totalDeletedSizeFormatted = "0B";
 
     private readonly IDeletionHistoryRepository _historyRepository;
     private readonly IConfirmationDialogService _confirmationDialogService;
     private event Action? _onHideHistory;
-
+    
     public HistoryWindowViewModel(IDeletionHistoryRepository historyRepository, IConfirmationDialogService confirmationDialogService)
     {
         _historyRepository = historyRepository;
@@ -50,7 +53,7 @@ public sealed partial class HistoryWindowViewModel : ViewModelBase
     {
         _onHideHistory = onHideHistory;
     }
-
+    
     public void SetOwnerWindow(Window window)
     {
         _confirmationDialogService.SetOwnerWindow(window);
@@ -71,6 +74,7 @@ public sealed partial class HistoryWindowViewModel : ViewModelBase
                 HasEntries = false;
                 TotalEntryCount = 0;
                 TotalDeletedSizeBytes = 0;
+                TotalDeletedSizeFormatted = "0B";
                 return;
             }
 
@@ -91,6 +95,7 @@ public sealed partial class HistoryWindowViewModel : ViewModelBase
             HasEntries = true;
             TotalEntryCount = entries.Count;
             TotalDeletedSizeBytes = entries.Sum(e => e.SizeBytes);
+            TotalDeletedSizeFormatted = ByteConverter.ToReadableString(TotalDeletedSizeBytes);
 
             Log.Information("Loaded deletion history: {EntryCount} entries grouped into {GroupCount} groups",
                 TotalEntryCount, GroupedEntries.Count);
@@ -143,7 +148,7 @@ public sealed partial class HistoryWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task DeleteEntryAsync(DeletionHistoryEntry entry)
     {
-        if (entry == null)
+        if (entry is null)
             return;
 
         try
@@ -160,81 +165,4 @@ public sealed partial class HistoryWindowViewModel : ViewModelBase
             Log.Error(ex, "Error deleting history entry: {EntryId}", entry.Id);
         }
     }
-
-    public string TotalDeletedSizeFormatted => ByteConverter.ToReadableString(TotalDeletedSizeBytes);
-}
-
-/// <summary>
-/// Represents a group of deletion history entries for a specific date.
-/// Used for grouping entries in the history view by deletion date.
-/// </summary>
-public sealed partial class HistoryEntryGroupViewModel : ViewModelBase
-{
-    [ObservableProperty]
-    private DateTime groupDate;
-
-    [ObservableProperty]
-    private ObservableCollection<DeletionHistoryEntryViewModel> entries = new();
-
-    [ObservableProperty]
-    private long groupTotalSizeBytes = 0;
-
-    [ObservableProperty]
-    private int groupEntryCount = 0;
-
-    [ObservableProperty]
-    private bool isExpanded = true;
-
-    public HistoryEntryGroupViewModel(DateTime date, System.Collections.Generic.List<DeletionHistoryEntry> groupEntries)
-    {
-        GroupDate = date;
-        GroupEntryCount = groupEntries.Count;
-        GroupTotalSizeBytes = groupEntries.Sum(e => e.SizeBytes);
-
-        foreach (var entry in groupEntries)
-        {
-            Entries.Add(new DeletionHistoryEntryViewModel(entry));
-        }
-    }
-
-    public string GroupDateFormatted => GroupDate.ToString("dddd, MMMM d, yyyy");
-
-    public string GroupSizeFormatted => ByteConverter.ToReadableString(GroupTotalSizeBytes);
-}
-
-/// <summary>
-/// Represents a single deletion history entry in the UI.
-/// Provides formatted display properties for the history view.
-/// </summary>
-public sealed partial class DeletionHistoryEntryViewModel : ViewModelBase
-{
-    [ObservableProperty]
-    private DeletionHistoryEntry entry;
-
-    public DeletionHistoryEntryViewModel(DeletionHistoryEntry entry)
-    {
-        Entry = entry;
-    }
-
-    public string SizeFormatted => ByteConverter.ToReadableString(Entry.SizeBytes);
-
-    public string TypeBadge => Entry.DeletionType switch
-    {
-        "RecycleBin" => "🗑️ Recycle Bin",
-        "Permanent" => "🔴 Permanent",
-        _ => Entry.DeletionType
-    };
-
-    public string TypeColor => Entry.DeletionType switch
-    {
-        "RecycleBin" => "#FFA500", // Orange for Recycle Bin
-        "Permanent" => "#DC143C",  // Crimson for Permanent
-        _ => "#999999"
-    };
-
-    public string ItemTypeIcon => Entry.IsDirectory ? "📁" : "📄";
-
-    public string DeletionTimeFormatted => Entry.DeletionDateTime.ToString("HH:mm:ss");
-
-    public string DisplayPath => PathExtensions.GetMiddleEllipsis(Entry.Path, 60);
 }

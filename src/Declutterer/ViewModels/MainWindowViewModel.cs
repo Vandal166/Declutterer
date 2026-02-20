@@ -28,7 +28,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     private string _selectedNodesSizeText = string.Empty; // a user-friendly string representation of the total size of the currently selected nodes
     
     [ObservableProperty]
-    private bool isHistoryVisible = false; // flag to show/hide the history view
+    private bool _isHistoryVisible = false; // flag to show/hide the history view
 
     [ObservableProperty]
     private HistoryWindowViewModel _historyViewModel; // ViewModel for the history view
@@ -114,6 +114,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     [RelayCommand]
     private void ClearAll()
     {
+        // Hide history view if it's currently visible before navigating to Home
+        if (IsHistoryVisible)
+            IsHistoryVisible = false;
+
         Roots.Clear();
         SelectedNodes.Clear();
         _currentScanOptions = null;
@@ -135,6 +139,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         var result = await _navigationService.ShowScanOptionsAsync();
         if (result != null)
         {
+            if (IsHistoryVisible)
+                IsHistoryVisible = false;
+            
             _currentScanOptions = result;
 
             // Clean up old subscriptions before clearing roots
@@ -158,6 +165,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     private void ShowHistoryInline()
     {
         // Create history view model with callback to hide history
+        ClearAll();
         HistoryViewModel.SetHideHistoryCallback(HideHistoryInline);
         IsHistoryVisible = true;
     }

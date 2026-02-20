@@ -53,11 +53,12 @@ public sealed class ErrorDialogService : IErrorDialogService
     /// <summary>
     /// Creates an error dialog window with the specified title and message.
     /// </summary>
-    private static Window CreateErrorDialog(string title, string message)
+    private Window CreateErrorDialog(string title, string message)
     {
         var dialog = new Window
         {
             Title = title,
+            Icon = _ownerWindow?.Icon,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Width = 500,

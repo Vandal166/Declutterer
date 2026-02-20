@@ -1,4 +1,6 @@
 ﻿<UserControl
+    HorizontalAlignment="Stretch"
+    VerticalAlignment="Stretch"
     d:DesignHeight="600"
     d:DesignWidth="1200"
     mc:Ignorable="d"
@@ -10,7 +12,7 @@
     xmlns:vm="using:Declutterer.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Grid RowDefinitions="Auto,*,Auto">
+    <Grid RowDefinitions="Auto,*">
         <!--  Header  -->
         <Border
             Background="#F5F5F5"
@@ -42,25 +44,36 @@
                     Orientation="Horizontal"
                     Spacing="10">
                     <TextBlock
-                        FontSize="12"
-                        Foreground="#666666"
+                        FontSize="16"
+                        FontWeight="Bold"
                         IsVisible="{Binding HasEntries}"
                         Text="{Binding TotalDeletedSizeFormatted, StringFormat='Total size: {0}'}" />
                 </StackPanel>
 
-                <TextBlock
-                    FontSize="11"
-                    Foreground="#999999"
-                    Grid.Column="0"
+                <StackPanel
+                    Grid.Column="1"
                     Grid.Row="1"
-                    IsVisible="{Binding HasEntries}"
-                    Margin="0,5,0,0"
-                    Text="{Binding GroupedEntries.Count, StringFormat='Grouped by date: {0} groups'}" />
+                    Orientation="Horizontal"
+                    Spacing="10">
+                    <Button
+                        Background="Transparent"
+                        BorderBrush="#CCCCCC"
+                        BorderThickness="1"
+                        Command="{Binding ClearHistoryCommand}"
+                        Content="Clear History"
+                        Foreground="#DC143C"
+                        IsEnabled="{Binding HasEntries}"
+                        Margin="0,0,10,0"
+                        Padding="15,10" />
+                </StackPanel>
             </Grid>
         </Border>
 
         <!--  Content Area  -->
-        <Grid Grid.Row="1">
+        <Grid
+            Grid.Row="1"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
             <!--  Empty State  -->
             <Border
                 Background="#FAFAFA"
@@ -106,11 +119,15 @@
             </StackPanel>
 
             <!--  History List  -->
-            <ScrollViewer IsVisible="{Binding HasEntries}" Padding="20">
-                <ItemsControl ItemsSource="{Binding GroupedEntries}">
+            <ScrollViewer
+                HorizontalAlignment="Stretch"
+                IsVisible="{Binding HasEntries}"
+                VerticalAlignment="Stretch"
+                VerticalScrollBarVisibility="Auto">
+                <ItemsControl HorizontalAlignment="Stretch" ItemsSource="{Binding GroupedEntries}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <StackPanel Spacing="15" />
+                            <StackPanel HorizontalAlignment="Stretch" Spacing="15" />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
@@ -120,6 +137,8 @@
                                 BorderBrush="#E0E0E0"
                                 BorderThickness="1"
                                 CornerRadius="8"
+                                HorizontalAlignment="Stretch"
+                                Margin="20,10"
                                 Padding="15">
                                 <Grid RowDefinitions="Auto,*">
                                     <!--  Group Header  -->
@@ -148,20 +167,21 @@
                                                 Spacing="15">
                                                 <StackPanel Orientation="Horizontal" Spacing="3">
                                                     <TextBlock
-                                                        FontSize="11"
+                                                        FontSize="13"
                                                         Foreground="#666666"
                                                         Text="{Binding GroupEntryCount, StringFormat='Items: {0}'}"
                                                         VerticalAlignment="Center" />
                                                 </StackPanel>
                                                 <StackPanel Orientation="Horizontal" Spacing="3">
                                                     <TextBlock
-                                                        FontSize="11"
+                                                        FontSize="13"
                                                         Foreground="#666666"
                                                         Text="Size:"
                                                         VerticalAlignment="Center" />
                                                     <TextBlock
-                                                        FontSize="11"
-                                                        Foreground="#666666"
+                                                        FontSize="13"
+                                                        FontWeight="Bold"
+                                                        Foreground="{Binding GroupTotalSizeBytes, Converter={StaticResource SizeToBrushConverter}}"
                                                         Text="{Binding GroupSizeFormatted}"
                                                         VerticalAlignment="Center" />
                                                 </StackPanel>
@@ -172,11 +192,12 @@
                                     <!--  Group Entries  -->
                                     <ItemsControl
                                         Grid.Row="1"
+                                        HorizontalAlignment="Stretch"
                                         ItemsSource="{Binding Entries}"
                                         Margin="0,15,0,0">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
-                                                <StackPanel Spacing="10" />
+                                                <StackPanel HorizontalAlignment="Stretch" Spacing="10" />
                                             </ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
@@ -189,14 +210,17 @@
                                                     Padding="12">
                                                     <Grid ColumnDefinitions="Auto,*,Auto,Auto" RowDefinitions="Auto,Auto">
                                                         <!--  Item Type Icon  -->
-                                                        <TextBlock
-                                                            FontSize="16"
+                                                        <Path
+                                                            Data="{Binding ItemTypeIconGeometry}"
+                                                            Fill="#666666"
                                                             Grid.Column="0"
                                                             Grid.Row="0"
                                                             Grid.RowSpan="2"
+                                                            Height="28"
                                                             Margin="0,0,10,0"
-                                                            Text="{Binding ItemTypeIcon}"
-                                                            VerticalAlignment="Center" />
+                                                            Stretch="Uniform"
+                                                            VerticalAlignment="Center"
+                                                            Width="28" />
 
                                                         <!--  Item Name and Path  -->
                                                         <StackPanel
@@ -229,12 +253,12 @@
                                                             Spacing="2"
                                                             VerticalAlignment="Center">
                                                             <TextBlock
-                                                                FontSize="11"
-                                                                Foreground="#666666"
+                                                                FontSize="14"
+                                                                Foreground="{Binding Entry.SizeBytes, Converter={StaticResource SizeToBrushConverter}}"
                                                                 Text="{Binding SizeFormatted}"
                                                                 TextAlignment="Right" />
                                                             <TextBlock
-                                                                FontSize="9"
+                                                                FontSize="11"
                                                                 Foreground="#999999"
                                                                 Text="{Binding DeletionTimeFormatted}"
                                                                 TextAlignment="Right" />
@@ -251,7 +275,7 @@
                                                             Padding="6,4"
                                                             VerticalAlignment="Center">
                                                             <TextBlock
-                                                                FontSize="9"
+                                                                FontSize="12"
                                                                 Foreground="White"
                                                                 Text="{Binding TypeBadge}"
                                                                 TextAlignment="Center" />
@@ -268,36 +292,5 @@
                 </ItemsControl>
             </ScrollViewer>
         </Grid>
-
-        <!--  Footer  -->
-        <Border
-            Background="#F5F5F5"
-            BorderBrush="#CCCCCC"
-            BorderThickness="0,1,0,0"
-            Grid.Row="2"
-            Padding="20">
-            <Grid ColumnDefinitions="*,Auto,Auto">
-                <Button
-                    Background="Transparent"
-                    BorderBrush="#CCCCCC"
-                    BorderThickness="1"
-                    Command="{Binding ClearHistoryCommand}"
-                    Content="Clear History"
-                    Foreground="#DC143C"
-                    Grid.Column="1"
-                    IsEnabled="{Binding HasEntries}"
-                    Margin="0,0,10,0"
-                    Padding="15,10" />
-                <Button
-                    Background="CornflowerBlue"
-                    BorderThickness="0"
-                    Command="{Binding HideHistoryCommand}"
-                    Content="Back"
-                    Foreground="White"
-                    Grid.Column="2"
-                    Name="BackButton"
-                    Padding="15,10" />
-            </Grid>
-        </Border>
     </Grid>
 </UserControl>
