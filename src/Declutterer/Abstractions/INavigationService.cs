@@ -9,5 +9,5 @@ public interface INavigationService
 {
     void SetOwnerWindow(Window window);
     Task<ScanOptions?> ShowScanOptionsAsync();
-    Task ShowCleanupWindowAsync(ObservableHashSet<TreeNode> selectedNodes);
+    Task<DeleteResult?> ShowCleanupWindowAsync(ObservableHashSet<TreeNode> selectedNodes);
 }

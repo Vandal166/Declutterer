@@ -84,7 +84,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
     [ObservableProperty]
     private bool _canDelete;
     
-    public event Action? RequestClose;
+    public event Action<DeleteResult?>? RequestClose;
     
     public CleanupWindowViewModel(ObservableCollection<TreeNode> itemsToDelete, IExplorerLauncher explorerLauncher, IErrorDialogService errorDialogService, IConfirmationDialogService confirmationDialogService, IDeleteService deleteService)
     {
@@ -118,7 +118,6 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
         {
             await DeletePermanentlyAsync();
         }
-        //TODO somehwere refresh the TreeDataGrid after deletion completes, maybe via an event or callback
     }
     
     [RelayCommand]
@@ -135,7 +134,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
     private void OnCancel()    
     {
         ItemsToDelete.Clear();
-        RequestClose?.Invoke();
+        RequestClose?.Invoke(null);
     }
 
     [RelayCommand]
@@ -173,7 +172,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
             // If deletion was successful, close the window
             if (moveToBinResult.Success && ItemsToDelete.Count == 0)
             {
-                RequestClose?.Invoke();
+                RequestClose?.Invoke(moveToBinResult);
             }
         }
         catch (OperationCanceledException)
@@ -239,7 +238,7 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
             // If deletion was successful, close the window
             if (deleteResult.Success && ItemsToDelete.Count == 0)
             {
-                RequestClose?.Invoke();
+                RequestClose?.Invoke(deleteResult);
             }
         }
         catch (OperationCanceledException)

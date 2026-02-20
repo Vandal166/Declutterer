@@ -14,12 +14,14 @@ public class TreeGridContextMenuServiceIntegrationTests
     private readonly IExplorerLauncher _explorerLauncher;
     private readonly IErrorDialogService _errorDialogService;
     private readonly IClipboard _clipboard;
-
+    private readonly IClipboardService _clipboardService;
+    
     public TreeGridContextMenuServiceIntegrationTests()
     {
         _explorerLauncher = Substitute.For<IExplorerLauncher>();
         _errorDialogService = Substitute.For<IErrorDialogService>();
         _clipboard = Substitute.For<IClipboard>();
+        _clipboardService = Substitute.For<IClipboardService>();
         _contextMenuService = new TreeGridContextMenuService(_explorerLauncher, _errorDialogService);
     }
 
@@ -139,7 +141,7 @@ public class TreeGridContextMenuServiceIntegrationTests
             FullPath = "/test/path"
         };
 
-        await _contextMenuService.CopyPathToClipboardAsync(node, _clipboard);
+        await _clipboardService.CopyTextAsync(node.FullPath);
 
         await _clipboard.Received(1).SetTextAsync("/test/path");
         await _errorDialogService.DidNotReceive().ShowErrorAsync(
@@ -149,7 +151,7 @@ public class TreeGridContextMenuServiceIntegrationTests
     [Fact]
     public async Task CopyPathToClipboardAsync_NullNode_DoesNotCopy()
     {
-        await _contextMenuService.CopyPathToClipboardAsync(null, _clipboard);
+        await _clipboardService.CopyTextAsync(null);
 
         await _clipboard.DidNotReceive().SetTextAsync(Arg.Any<string>());
     }
@@ -164,7 +166,7 @@ public class TreeGridContextMenuServiceIntegrationTests
         };
 
         var exception = await Record.ExceptionAsync(async () => 
-            await _contextMenuService.CopyPathToClipboardAsync(node, null));
+            await _clipboardService.CopyTextAsync(node.FullPath));
 
         Assert.Null(exception);
     }
@@ -180,7 +182,7 @@ public class TreeGridContextMenuServiceIntegrationTests
         var exception = new InvalidOperationException("Clipboard error");
         _clipboard.SetTextAsync(Arg.Any<string>()).Returns(Task.FromException(exception));
 
-        await _contextMenuService.CopyPathToClipboardAsync(node, _clipboard);
+        await _clipboardService.CopyTextAsync(node.FullPath);
 
         await _errorDialogService.Received(1).ShowErrorAsync(
             "Failed to Copy Path",
@@ -221,7 +223,7 @@ public class TreeGridContextMenuServiceIntegrationTests
         _clipboard.SetTextAsync(Arg.Any<string>()).Returns(Task.FromException(exception2));
 
         await _contextMenuService.OpenInExplorerAsync(node);
-        await _contextMenuService.CopyPathToClipboardAsync(node, _clipboard);
+        await _clipboardService.CopyTextAsync(node.FullPath);
 
         await _errorDialogService.Received(1).ShowErrorAsync(
             "Failed to Open in Explorer", Arg.Any<string>(), exception1);
@@ -251,7 +253,7 @@ public class TreeGridContextMenuServiceIntegrationTests
         _explorerLauncher.Received(1).OpenInExplorer("/documents/document.pdf");
 
         // User copies path to clipboard
-        await _contextMenuService.CopyPathToClipboardAsync(fileNode, _clipboard);
+        await _clipboardService.CopyTextAsync(fileNode.FullPath);
         await _clipboard.Received(1).SetTextAsync("/documents/document.pdf");
 
         // User deselects
@@ -313,7 +315,7 @@ public class TreeGridContextMenuServiceIntegrationTests
 
         foreach (var node in nodes)
         {
-            await _contextMenuService.CopyPathToClipboardAsync(node, _clipboard);
+            await _clipboardService.CopyTextAsync(node.FullPath);
         }
 
         await _clipboard.Received(1).SetTextAsync("/path/file1.txt");

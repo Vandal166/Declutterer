@@ -44,26 +44,4 @@ public sealed class TreeGridContextMenuService : IContextMenuService
                 e);
         }
     }
-
-    public async Task CopyPathToClipboardAsync(TreeNode? node, IClipboard? clipboard)
-    {
-        try
-        {
-            if (node is null)
-                return;
-
-            if (clipboard is null)
-                return;
-
-            await clipboard.SetTextAsync(node.FullPath);
-        }
-        catch (Exception e)
-        {
-            Log.Error(e, "Failed to copy path to clipboard: {NodePath}", node?.FullPath);
-            await _errorDialogService.ShowErrorAsync(
-                "Failed to Copy Path",
-                $"Could not copy the path to clipboard:\n{node?.FullPath}",
-                e);
-        }
-    }
 }

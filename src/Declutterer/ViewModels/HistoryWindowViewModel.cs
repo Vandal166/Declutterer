@@ -12,11 +12,8 @@ using Serilog;
 
 namespace Declutterer.ViewModels;
 
-/// <summary>
-/// ViewModel for the deletion history window/view.
-/// Groups and displays deletion history entries in a user-friendly manner.
-/// Handles filtering, empty state management, and navigation.
-/// </summary>
+//TODO mby show an pie chart i.e.: "Images (2GB), Videos (10GB), Documents (500MB)."
+
 public sealed partial class HistoryWindowViewModel : ViewModelBase
 {
     [ObservableProperty]

@@ -1,5 +1,4 @@
 ﻿using System.Threading.Tasks;
-using Avalonia.Input.Platform;
 using Declutterer.Models;
 
 namespace Declutterer.Abstractions;
@@ -15,9 +14,4 @@ public interface IContextMenuService
     /// Opens the node's path in the Explorer.
     /// </summary>
     Task OpenInExplorerAsync(TreeNode? node);
-
-    /// <summary>
-    /// Copies the node's path to the clipboard.
-    /// </summary>
-    Task CopyPathToClipboardAsync(TreeNode? node, IClipboard? clipboard); //TODO
 }

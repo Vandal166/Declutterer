@@ -56,7 +56,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     /// <summary>
     /// Event raised when the cleanup window closes. Allows the view to perform cleanup operations.
     /// </summary>
-    public event EventHandler? CleanupWindowClosed;
+    public event EventHandler<DeleteResult?>? CleanupWindowClosed;
     
     public MainWindowViewModel(INavigationService navigationService, IScanWorkflowService scanWorkflowService, ITreeNavigationService treeNavigationService,
         IContextMenuService contextMenuService, ICommandService commandService, IClipboardService clipboardService, ISelectionManagementService selectionManagementService, HistoryWindowViewModel historyViewModel)
@@ -144,20 +144,28 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
             
             _currentScanOptions = result;
 
-            // Clean up old subscriptions before clearing roots
-            _selectionManagementService.UnsubscribeFromAllNodes();
-            SelectedNodes.Clear();
+            await InvokeScanAsync();
+        }
+    }
 
-            IsAnyNodeLoading = true;
-            try
-            {
-                bool scanSucceeded = await _scanWorkflowService.ExecuteScanAsync(result, Roots);
-                NoChildrenFound = !scanSucceeded; // if scan failed or all roots have no children then set NoChildrenFound to true
-            }
-            finally
-            {
-                IsAnyNodeLoading = false;
-            }
+    public async Task InvokeScanAsync()
+    {
+        if(_currentScanOptions is null)
+            return;
+        
+        // Clean up old subscriptions before clearing roots
+        _selectionManagementService.UnsubscribeFromAllNodes();
+        SelectedNodes.Clear();
+
+        IsAnyNodeLoading = true;
+        try
+        {
+            bool scanSucceeded = await _scanWorkflowService.ExecuteScanAsync(_currentScanOptions, Roots);
+            NoChildrenFound = !scanSucceeded; // if scan failed or all roots have no children then set NoChildrenFound to true
+        }
+        finally
+        {
+            IsAnyNodeLoading = false;
         }
     }
 
@@ -184,10 +192,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         if (SelectedNodes.Count == 0)
             return;
 
-        await _navigationService.ShowCleanupWindowAsync(SelectedNodes);
+        var result = await _navigationService.ShowCleanupWindowAsync(SelectedNodes);
         
         // Signal that cleanup window has closed
-        CleanupWindowClosed?.Invoke(this, EventArgs.Empty);
+        CleanupWindowClosed?.Invoke(this, result);
     }
     
     public async Task HandleAltClickExpandAsync(TreeNode node, bool shouldExpand)

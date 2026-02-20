@@ -43,7 +43,7 @@ public sealed class NavigationService : INavigationService
         return await scanOptionsWindow.ShowDialog<ScanOptions?>(window);
     }
 
-    public async Task ShowCleanupWindowAsync(ObservableHashSet<TreeNode> selectedNodes)
+    public async Task<DeleteResult?> ShowCleanupWindowAsync(ObservableHashSet<TreeNode> selectedNodes)
     {
         if (_ownerWindow is not Window window)
             throw new InvalidOperationException("Owner window not set. Call SetOwnerWindow first.");
@@ -53,6 +53,6 @@ public sealed class NavigationService : INavigationService
             DataContext = new CleanupWindowViewModel(selectedNodes, _explorerLauncher, _errorDialogService, _confirmationDialogService, _deleteService)
         };
 
-        await cleanupWindow.ShowDialog(window);
+        return await cleanupWindow.ShowDialog<DeleteResult?>(window);
     }
 }

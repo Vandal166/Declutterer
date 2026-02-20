@@ -1,14 +1,11 @@
 using System;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Declutterer.Abstractions;
 using Declutterer.Factories;
 using Declutterer.ViewModels;
 using Declutterer.Services;
 
 namespace Declutterer.Views;
-
-//TODO: separate History view that will display an pie chart showing: "Images (2GB), Videos (10GB), Documents (500MB)."
 
 public partial class MainWindow : Window
 {
@@ -56,10 +53,15 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel viewModel)
         {
             // Subscribe to cleanup window close event to reset error dialog service owner
-            viewModel.CleanupWindowClosed += (_, _) =>
+            viewModel.CleanupWindowClosed += (__, result) =>
             {
                 _errorDialogService.SetOwnerWindow(this);
                 _navigationService.SetOwnerWindow(this);
+
+                if (result is not null) // if the cleanup window was closed with a result (i.e., not cancelled), we trigger a re-scan to refresh the state
+                {
+                    _ = viewModel.InvokeScanAsync();
+                }
             };
             
             // finding TreeDataGrid control and setting up the hierarchical data source for it
