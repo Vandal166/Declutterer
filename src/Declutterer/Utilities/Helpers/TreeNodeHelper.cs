@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Declutterer.Domain.Models;
 using Declutterer.Utilities.Extensions;
-using TreeNode = Declutterer.Domain.Models.TreeNode;
 
 namespace Declutterer.Utilities.Helpers;
 
