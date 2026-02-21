@@ -366,11 +366,10 @@ public sealed class DeleteService : IDeleteService
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            // Windows-specific critical paths
+            // Windows-specific critical system paths - only OS/system critical paths
             criticalSystemPaths.AddRange(
                 new[]
                 {
-                    "c:\\",
                     "c:\\windows",
                     "c:\\program files",
                     "c:\\program files (x86)",
@@ -392,27 +391,19 @@ public sealed class DeleteService : IDeleteService
                     "c:\\users\\default user",
                     "c:\\users\\public",
                     "c:\\users\\all users",
-                    // Other drive roots
-                    "d:\\",
-                    "e:\\",
-                    "f:\\",
-                    "g:\\",
-                    "h:\\",
                 });
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            // Linux-specific critical paths
+            // Linux-specific critical system paths - only OS/system critical paths
             criticalSystemPaths.AddRange(
                 new[]
                 {
-                    "/",
                     "/bin",
                     "/sbin",
-                    "/usr",
                     "/usr/bin",
                     "/usr/sbin",
-                    "/usr/local",
+                    "/usr/lib",
                     "/usr/share",
                     "/etc",
                     "/sys",
@@ -421,64 +412,38 @@ public sealed class DeleteService : IDeleteService
                     "/boot",
                     "/lib",
                     "/lib64",
-                    "/var",
-                    "/var/log",
-                    "/var/run",
-                    "/var/tmp",
-                    "/home",
                     "/dev",
-                    "/mnt",
-                    "/media",
-                    "/opt",
-                    "/srv",
                     "/run",
                     "/lost+found",
-                    "/tmp",
                 });
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            // macOS-specific critical paths
+            // macOS-specific critical system paths - only OS/system critical paths
             criticalSystemPaths.AddRange(
                 new[]
                 {
-                    "/",
                     "/bin",
                     "/sbin",
-                    "/usr",
                     "/usr/bin",
                     "/usr/sbin",
-                    "/usr/local",
+                    "/usr/lib",
                     "/usr/share",
                     "/etc",
                     "/sys",
                     "/proc",
-                    "/root",
                     "/boot",
                     "/lib",
-                    "/var",
-                    "/var/log",
-                    "/var/run",
-                    "/var/tmp",
-                    "/home",
                     "/dev",
-                    "/mnt",
-                    "/media",
-                    "/opt",
-                    "/srv",
                     "/run",
                     "/lost+found",
-                    "/tmp",
                     "/Applications",
                     "/Library",
                     "/System",
-                    "/Volumes",
-                    "/Network",
-                    "/private",
                     "/cores",
-                    "/var/folders",
                 });
         }
+
 
         // Check against critical system paths
         foreach (var dangerousPath in criticalSystemPaths)
@@ -499,15 +464,6 @@ public sealed class DeleteService : IDeleteService
                     $"Cannot delete system-critical directory: {path}. " +
                     $"This operation has been blocked for safety reasons.");
             }
-        }
-
-        // Additional check: path should be reasonably deep (not root or top-level only)
-        var pathDepth = normalizedPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length;
-        if (pathDepth < 3 && (normalizedPath.EndsWith($"{Path.DirectorySeparatorChar}") || normalizedPath.Length <= 3))
-        {
-            throw new OperationFailedException(
-                $"Cannot delete root or top-level system directory: {path}. " +
-                $"This operation has been blocked for safety reasons.");
         }
     }
 
