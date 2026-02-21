@@ -22,7 +22,7 @@ public sealed class DeleteService : IDeleteService
 
     public DeleteService(IDeletionHistoryRepository historyRepository)
     {
-        _historyRepository = historyRepository;
+        _historyRepository = historyRepository ?? throw new ArgumentNullException(nameof(historyRepository));
     }
 
     public async Task<DeleteResult> MoveToRecycleBinAsync(ObservableCollection<TreeNode> items,

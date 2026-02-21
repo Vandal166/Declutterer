@@ -34,7 +34,6 @@ public static class TreeDataGridSourceFactory
                         // Don't create checkbox for root nodes (Depth == 0)
                         if (node.Depth == 0)
                         {
-                            node.IsExpanded = true; // auto expanded root node
                             return new Control();
                         }
                                 

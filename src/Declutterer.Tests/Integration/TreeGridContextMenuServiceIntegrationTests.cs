@@ -1,6 +1,7 @@
 using Avalonia.Input.Platform;
 using Declutterer.Abstractions;
 using Declutterer.Domain.Models;
+using Declutterer.UI.Services.Clipboard;
 using Declutterer.UI.Services.Interaction;
 using NSubstitute;
 
@@ -12,14 +13,15 @@ public class TreeGridContextMenuServiceIntegrationTests
     private readonly IExplorerLauncher _explorerLauncher;
     private readonly IErrorDialogService _errorDialogService;
     private readonly IClipboard _clipboard;
-    private readonly IClipboardService _clipboardService;
+    private readonly AvaloniaClipboardService _clipboardService;
     
     public TreeGridContextMenuServiceIntegrationTests()
     {
         _explorerLauncher = Substitute.For<IExplorerLauncher>();
         _errorDialogService = Substitute.For<IErrorDialogService>();
         _clipboard = Substitute.For<IClipboard>();
-        _clipboardService = Substitute.For<IClipboardService>();
+        _clipboardService = new AvaloniaClipboardService(_errorDialogService);
+        _clipboardService.SetClipboard(_clipboard);
         _contextMenuService = new TreeGridContextMenuService(_explorerLauncher, _errorDialogService);
     }
 
