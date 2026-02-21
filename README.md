@@ -3,7 +3,7 @@
 Declutterer is a cross-platform desktop application for scanning, analysing, and cleaning up large or old files and directories. It presents your file system as an interactive tree, lets you filter and score items by size and age, and offers smart auto-selection so that you can identify clutter quickly and delete it either to the Recycle Bin/Trash or permanently.
 
 ## Showcase
-![showcase](showcase.gif)
+![showcase](Showcase.gif)
 
 ## Functionalities
 
