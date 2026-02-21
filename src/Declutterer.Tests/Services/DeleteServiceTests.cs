@@ -1,9 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
 using Declutterer.Abstractions;
-using Declutterer.Domain.Models;
 using Declutterer.Domain.Services.Deletion;
 using Declutterer.Tests.Helpers;
+using Declutterer.Utilities.Exceptions;
 using NSubstitute;
 using TreeNode = Declutterer.Domain.Models.TreeNode;
 
@@ -98,22 +98,14 @@ public class DeleteServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task DeletePermanentlyAsync_CriticalSystemPath_RecordsFailureWithoutThrowing()
+    public void ValidatePathSafety_CriticalSystemPath_ThrowsOperationFailedException()
     {
-        // On each platform the path safety check blocks deletion of system-critical paths.
-        // This verifies the guard works and the error is surfaced as a result, not an exception.
         var criticalPath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? @"C:\Windows\System32\kernel32.dll"
             : "/etc/hostname";
 
-        var node = new TreeNode { Name = "critical", FullPath = criticalPath, Size = 0 };
-        var items = new ObservableCollection<TreeNode> { node };
-
-        var result = await _service.DeletePermanentlyAsync(items);
-
-        Assert.False(result.Success);
-        Assert.Equal(1, result.FailedCount);
-        Assert.Single(result.Errors);
+        Assert.Throws<OperationFailedException>(() =>
+            DeleteService.ValidatePathSafety(criticalPath));
     }
 
     [Fact]

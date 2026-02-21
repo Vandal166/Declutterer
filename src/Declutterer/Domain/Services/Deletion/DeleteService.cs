@@ -12,7 +12,6 @@ using Declutterer.Domain.Models;
 using Declutterer.Utilities.Exceptions;
 using Microsoft.VisualBasic.FileIO;
 using Serilog;
-using TreeNode = Declutterer.Domain.Models.TreeNode;
 
 namespace Declutterer.Domain.Services.Deletion;
 
@@ -167,15 +166,7 @@ public sealed class DeleteService : IDeleteService
         return result;
     }
 
-    private static long GetTotalSize(TreeNode node)
-    {
-        if (node.IsDirectory)
-        {
-            return node.Size; // TreeNode should have accumulated size
-        }
-
-        return node.Size;
-    }
+    private static long GetTotalSize(TreeNode node) => node.Size;
 
     /// <summary>
     /// Cross-platform method to move a file or directory to the recycle bin / trash.
@@ -355,12 +346,12 @@ public sealed class DeleteService : IDeleteService
             return (false, "", ex.Message);
         }
     }
-
+    
     /// <summary>
     /// Validates that a path is safe to delete and not a critical system directory.
     /// Throws an exception if the path is deemed unsafe.
     /// </summary>
-    private static void ValidatePathSafety(string path)
+    public static void ValidatePathSafety(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
