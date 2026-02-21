@@ -66,6 +66,7 @@ public sealed class ScanWorkflowService : IScanWorkflowService
             {
                 if (childrenByRoot.TryGetValue(root, out var children)) // if we got children for this root then add them to the root's Children collection
                 {
+                    root.IsExpanded = true; // expand before adding children so the TreeDataGrid shows them immediately
                     // Add children in batches to avoid overwhelming the UI thread
                     for (int i = 0; i < children.Count; i += batchSize)
                     {
@@ -75,7 +76,6 @@ public sealed class ScanWorkflowService : IScanWorkflowService
                             root.Children.Add(child);
                         }
                     }
-                    root.IsExpanded = true;
                 }
             }
         });

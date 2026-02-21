@@ -7,5 +7,5 @@ public interface IClipboardService
     /// <summary>
     /// Copies the given text to the clipboard.
     /// </summary>
-    Task CopyTextAsync(string text);
+    Task CopyTextAsync(string? text);
 }
