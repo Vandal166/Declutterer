@@ -1,9 +1,7 @@
-using System;
-using System.Threading.Tasks;
 using Avalonia.Input.Platform;
 using Declutterer.Abstractions;
-using Declutterer.Models;
-using Declutterer.Services;
+using Declutterer.Domain.Models;
+using Declutterer.UI.Services.Interaction;
 using NSubstitute;
 
 namespace Declutterer.Tests.Integration;

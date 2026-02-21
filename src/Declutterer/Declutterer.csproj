@@ -3,8 +3,18 @@
         <OutputType>WinExe</OutputType>
         <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
-        <ApplicationManifest>app.manifest</ApplicationManifest>
+        <ApplicationManifest>Application/app.manifest</ApplicationManifest>
         <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+        
+        <!-- Metadata and Icon for the deployed app -->
+        <ApplicationIcon>Assets/favicon.ico</ApplicationIcon>
+        <Company>https://github.com/Vandal166</Company>
+        <Copyright>© [V]andal 2026</Copyright>
+        <Product>Declutterer</Product>
+        <Description>Declutterer is a tool designed to help you find and remove unused files and folders from your system, freeing up valuable disk space and improving organization.</Description>
+        <FileVersion>1.0.0.0</FileVersion>
+        <AssemblyVersion>1.0.0.0</AssemblyVersion>
+        <InformationalVersion>1.0.0</InformationalVersion>
     </PropertyGroup>
 
     <ItemGroup>
@@ -31,5 +41,35 @@
         <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
         <PackageReference Include="System.Drawing.Common" Version="10.0.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Update="UI\Views\MainWindow.axaml.cs">
+        <DependentUpon>MainWindow.axaml</DependentUpon>
+        <SubType>Code</SubType>
+      </Compile>
+      <Compile Update="UI\Views\ScanOptionsWindow.axaml.cs">
+        <DependentUpon>ScanOptionsWindow.axaml</DependentUpon>
+        <SubType>Code</SubType>
+      </Compile>
+      <Compile Update="UI\Views\CleanupWindow.axaml.cs">
+        <DependentUpon>CleanupWindow.axaml</DependentUpon>
+        <SubType>Code</SubType>
+      </Compile>
+      <Compile Update="UI\Views\HistoryView.axaml.cs">
+        <DependentUpon>HistoryView.axaml</DependentUpon>
+        <SubType>Code</SubType>
+      </Compile>
+      <Compile Update="Application\App.axaml.cs">
+        <DependentUpon>App.axaml</DependentUpon>
+        <SubType>Code</SubType>
+      </Compile>
+    </ItemGroup>
+
+    <ItemGroup>
+      <AdditionalFiles Include="UI\Views\CleanupWindow.axaml" />
+      <AdditionalFiles Include="UI\Views\HistoryView.axaml" />
+      <AdditionalFiles Include="UI\Views\MainWindow.axaml" />
+      <AdditionalFiles Include="UI\Views\ScanOptionsWindow.axaml" />
     </ItemGroup>
 </Project>

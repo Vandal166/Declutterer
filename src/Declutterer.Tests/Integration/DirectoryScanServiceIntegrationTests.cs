@@ -1,9 +1,5 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Declutterer.Models;
-using Declutterer.Services;
+using Declutterer.Domain.Models;
+using Declutterer.Domain.Services.Scanning;
 using Declutterer.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
 

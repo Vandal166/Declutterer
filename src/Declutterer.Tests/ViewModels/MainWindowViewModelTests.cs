@@ -1,6 +1,6 @@
-using Declutterer.ViewModels;
-using Declutterer.Models;
 using Declutterer.Abstractions;
+using Declutterer.Domain.Models;
+using Declutterer.UI.ViewModels;
 using NSubstitute;
 
 namespace Declutterer.Tests.ViewModels;

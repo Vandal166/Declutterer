@@ -1,7 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
-using Declutterer.Models;
+using ScanOptions = Declutterer.Domain.Models.ScanOptions;
+using TreeNode = Declutterer.Domain.Models.TreeNode;
 
 namespace Declutterer.Abstractions;
 

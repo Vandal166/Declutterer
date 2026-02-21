@@ -1,10 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Declutterer.Common;
-using Declutterer.Models;
-using Declutterer.Services;
-using NSubstitute;
+using Declutterer.Domain.Models;
+using Declutterer.Domain.Services.Selection;
+using Declutterer.UI.Services.Commands;
+using Declutterer.Utilities.Helpers;
 
 namespace Declutterer.Tests.Integration;
 

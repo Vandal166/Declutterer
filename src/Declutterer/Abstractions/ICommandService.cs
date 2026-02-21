@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
-using Declutterer.Common;
-using Declutterer.Models;
+using Declutterer.Utilities.Helpers;
+using ScanOptions = Declutterer.Domain.Models.ScanOptions;
+using TreeNode = Declutterer.Domain.Models.TreeNode;
 
 namespace Declutterer.Abstractions;
 

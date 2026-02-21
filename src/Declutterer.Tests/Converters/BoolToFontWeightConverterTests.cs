@@ -1,6 +1,6 @@
 using System.Globalization;
 using Avalonia.Media;
-using Declutterer.Converters;
+using Declutterer.UI.Converters;
 
 namespace Declutterer.Tests.Converters;
 

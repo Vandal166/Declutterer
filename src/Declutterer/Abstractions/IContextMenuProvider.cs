@@ -1,5 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.Input;
-using Declutterer.Models;
+using TreeNode = Declutterer.Domain.Models.TreeNode;
 
 namespace Declutterer.Abstractions;
 

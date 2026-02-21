@@ -1,5 +1,5 @@
-using Declutterer.Common;
-using Declutterer.Models;
+using Declutterer.Domain.Models;
+using Declutterer.Utilities.Helpers;
 
 namespace Declutterer.Tests.Common;
 

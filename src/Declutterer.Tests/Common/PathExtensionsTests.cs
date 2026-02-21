@@ -1,4 +1,4 @@
-using Declutterer.Common;
+using Declutterer.Utilities.Extensions;
 
 namespace Declutterer.Tests.Common;
 

@@ -1,7 +1,9 @@
 ﻿using System.Threading.Tasks;
 using Avalonia.Controls;
-using Declutterer.Common;
-using Declutterer.Models;
+using Declutterer.Domain.Services.Deletion;
+using Declutterer.Utilities.Helpers;
+using ScanOptions = Declutterer.Domain.Models.ScanOptions;
+using TreeNode = Declutterer.Domain.Models.TreeNode;
 
 namespace Declutterer.Abstractions;
 

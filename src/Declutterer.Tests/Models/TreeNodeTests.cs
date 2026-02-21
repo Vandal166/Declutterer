@@ -1,4 +1,4 @@
-using Declutterer.Models;
+using Declutterer.Domain.Models;
 
 namespace Declutterer.Tests.Models;
 

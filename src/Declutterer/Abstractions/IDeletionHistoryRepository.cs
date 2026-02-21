@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Declutterer.Models;
+using Declutterer.Domain.Models;
 
 namespace Declutterer.Abstractions;
 

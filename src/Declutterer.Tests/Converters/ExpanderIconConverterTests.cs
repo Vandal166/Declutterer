@@ -1,5 +1,5 @@
 using System.Globalization;
-using Declutterer.Converters;
+using Declutterer.UI.Converters;
 using Material.Icons;
 
 namespace Declutterer.Tests.Converters;

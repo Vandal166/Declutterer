@@ -1,0 +1,43 @@
+<Application
+    RequestedThemeVariant="Light"
+    x:Class="Declutterer.Application.App"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:application="clr-namespace:Declutterer.Application"
+    xmlns:converters="clr-namespace:Declutterer.UI.Converters"
+    xmlns:local="using:Declutterer"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--  "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options.  -->
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <converters:BytesToStringConverter x:Key="BytesToStringConverter" />
+            <converters:LoadingSpinnerConverter x:Key="LoadingSpinnerConverter" />
+            <converters:FolderOrFileIconConverter x:Key="FolderOrFileIconConverter" />
+            <converters:SortIndicatorConverter x:Key="SortIndicatorConverter" />
+            <converters:ExpanderIconConverter x:Key="ExpanderIconConverter" />
+            <converters:DepthToIndentConverter x:Key="DepthToIndentConverter" />
+            <converters:GreaterThanZeroToBooleanConverter x:Key="GreaterThanZeroToBooleanConverter" />
+            <converters:EqualToZeroToBooleanConverter x:Key="EqualToZeroToBooleanConverter" />
+            <converters:ZeroToBooleanConverter x:Key="ZeroToBooleanConverter" />
+            <converters:BooleanToBrushConverter x:Key="BooleanToBrushConverter" />
+            <converters:PathMiddleEllipsisConverter x:Key="PathMiddleEllipsisConverter" />
+            <converters:SizeToBrushConverter x:Key="SizeToBrushConverter" />
+            <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter" />
+
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://LoadingIndicators.Avalonia/LoadingIndicators.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.DataTemplates>
+        <application:ViewLocator />
+    </Application.DataTemplates>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
+        <StyleInclude Source="avares://Avalonia.Controls.TreeDataGrid/Themes/Fluent.axaml" />
+        <StyleInclude Source="/UI/Styles/Styles.axaml" />
+    </Application.Styles>
+</Application>

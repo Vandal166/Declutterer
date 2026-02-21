@@ -1,6 +1,5 @@
-using System;
-using Declutterer.Models;
-using Declutterer.Services;
+using Declutterer.Domain.Models;
+using Declutterer.Domain.Services.Scanning;
 
 namespace Declutterer.Tests.Services;
 

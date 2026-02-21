@@ -1,5 +1,5 @@
-using Declutterer.ViewModels;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Declutterer.UI.ViewModels;
 
 namespace Declutterer.Tests.ViewModels;
 

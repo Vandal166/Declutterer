@@ -1,12 +1,11 @@
-using System;
 using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Declutterer.Abstractions;
-using Declutterer.Models;
-using Declutterer.Services;
+using Declutterer.Domain.Models;
+using Declutterer.Domain.Services.Scanning;
+using Declutterer.Domain.Services.Selection;
 using Declutterer.Tests.Helpers;
+using Declutterer.UI.Services.Icons;
+using Declutterer.UI.Services.Workflow;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
@@ -31,7 +30,7 @@ public class DirectoryScanToSelectionWorkflowTests : IDisposable
         _filterService = new ScanFilterService(filterBuilder);
         _scanService = new DirectoryScanService(_filterService, NullLogger<DirectoryScanService>.Instance);
         
-        var iconLoadingService = Substitute.For<IconLoadingService>(Substitute.For<IIconLoader>());
+        var iconLoadingService = Substitute.For<IconLoadingScheduler>(Substitute.For<IIconLoader>());
         _workflowService = new ScanWorkflowService(_scanService, iconLoadingService, _testDispatcher);
         
         _scorer = new SmartSelectionScorer();
