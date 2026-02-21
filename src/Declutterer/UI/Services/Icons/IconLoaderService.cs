@@ -97,6 +97,7 @@ public class IconLoaderService : IIconLoader
         });
     }
 
+    //TODO this does not work, tried on Ubuntu:latest
     private static Task<Bitmap?> LoadLinuxIconAsync(string fullPath, bool isDirectory)
     {
         return Task.Run(() =>
