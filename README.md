@@ -1,12 +1,9 @@
 # Declutterer
 
-![showcase](showcase.gif)
-
-## Description
-
 Declutterer is a cross-platform desktop application for scanning, analysing, and cleaning up large or old files and directories. It presents your file system as an interactive tree, lets you filter and score items by size and age, and offers smart auto-selection so that you can identify clutter quickly and delete it either to the Recycle Bin/Trash or permanently.
 
----
+## Showcase
+![showcase](showcase.gif)
 
 ## Functionalities
 
@@ -21,13 +18,11 @@ Declutterer is a cross-platform desktop application for scanning, analysing, and
 - **Expand/collapse all** – Alt-click a directory to expand or collapse the entire subtree.
 - **Safety guard** – built-in validation blocks deletion of known system-critical directories on Windows, Linux, and macOS.
 
----
-
 ## Technical Overview
 
 | Layer | Technology |
 |---|---|
-| UI framework | [Avalonia UI](https://avaloniaui.net/) (cross-platform) |
+| UI framework | [Avalonia UI](https://avaloniaui.net/) |
 | MVVM | CommunityToolkit.Mvvm |
 | Logging | [Serilog](https://serilog.net/) (Debug builds: console output; Release builds: Fatal-only) |
 | Dependency injection | Microsoft.Extensions.DependencyInjection |
@@ -59,7 +54,6 @@ src/
 
 Both the static `Serilog.Log` class and the injected `ILogger<T>` (registered via `AddSerilog()`) pass through the same Serilog pipeline. In **Debug** builds the pipeline writes to the console at `Debug` level and above. In **Release** builds `MinimumLevel.Fatal()` effectively silences all non-fatal log output from both logging paths.
 
----
 
 ## How to Build and Run
 
