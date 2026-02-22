@@ -2,8 +2,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
+using Declutterer.UI.ViewModels;
 using Serilog;
-using HistoryWindowViewModel = Declutterer.UI.ViewModels.HistoryWindowViewModel;
 
 namespace Declutterer.UI.Views;
 
@@ -22,7 +22,7 @@ public partial class HistoryView : UserControl
 
         if (DataContext is HistoryWindowViewModel viewModel)
         {
-            // Load history when the view is first loaded
+            // Initial load of history and setting owner window
             _ = viewModel.LoadHistoryAsync();
             var window = this.GetVisualRoot() as Window;
             if (window != null)
@@ -38,9 +38,13 @@ public partial class HistoryView : UserControl
             parent?.GetObservable(IsVisibleProperty)
                 .Subscribe(isVisible =>
                 {
-                    // Reload history each time the parent becomes visible
+                    // reloading history and setting owner window when the view becomes visible again
                     if (isVisible && !_previouslyVisible && DataContext is HistoryWindowViewModel vm)
                     {
+                        if (window != null)
+                        {
+                            viewModel.SetOwnerWindow(window);
+                        }
                         _ = vm.LoadHistoryAsync();
                     }
                     _previouslyVisible = isVisible;

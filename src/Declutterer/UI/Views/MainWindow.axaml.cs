@@ -5,6 +5,7 @@ using Declutterer.UI.Factories;
 using Declutterer.UI.Services.Clipboard;
 using Declutterer.UI.Services.Interaction;
 using Declutterer.UI.ViewModels;
+using Declutterer.Utilities.Extensions;
 
 namespace Declutterer.UI.Views;
 
@@ -47,6 +48,12 @@ public partial class MainWindow : Window
         }
     }
 
+
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        this.FitToScreen(0.90, 0.90);
+    }
 
     protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
     {

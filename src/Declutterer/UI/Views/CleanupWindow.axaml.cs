@@ -2,7 +2,8 @@
 using Avalonia.Controls;
 using Declutterer.Abstractions;
 using Declutterer.UI.Services.Interaction;
-using CleanupWindowViewModel = Declutterer.UI.ViewModels.CleanupWindowViewModel;
+using Declutterer.UI.ViewModels;
+using Declutterer.Utilities.Extensions;
 
 namespace Declutterer.UI.Views;
 
@@ -18,6 +19,12 @@ public partial class CleanupWindow : Window
         _confirmationDialogService = confirmationDialogService;
     }
     
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        this.FitToScreen(0.65, 0.85);
+    }
+
     protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
     {
         base.OnLoaded(e);

@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Declutterer.Abstractions;
+using Declutterer.Domain.Models;
 using Serilog;
-using TreeNode = Declutterer.Domain.Models.TreeNode;
 
 namespace Declutterer.UI.Services.Interaction;
 

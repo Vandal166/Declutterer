@@ -5,11 +5,8 @@ using Declutterer.Abstractions;
 using Declutterer.Domain.Models;
 using Declutterer.Domain.Services.Selection;
 using Declutterer.Utilities.Helpers;
-using ScanOptions = Declutterer.Domain.Models.ScanOptions;
-using TreeNode = Declutterer.Domain.Models.TreeNode;
 
 namespace Declutterer.UI.Services.Commands;
-
 
 public sealed class CommandService : ICommandService
 {

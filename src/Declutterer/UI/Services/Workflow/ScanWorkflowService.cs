@@ -5,10 +5,9 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Declutterer.Abstractions;
+using Declutterer.Domain.Models;
 using Declutterer.Domain.Services.Scanning;
 using Declutterer.UI.Services.Icons;
-using ScanOptions = Declutterer.Domain.Models.ScanOptions;
-using TreeNode = Declutterer.Domain.Models.TreeNode;
 
 namespace Declutterer.UI.Services.Workflow;
 

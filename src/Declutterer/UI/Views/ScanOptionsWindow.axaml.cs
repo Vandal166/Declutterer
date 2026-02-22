@@ -1,6 +1,7 @@
 ﻿using System;
 using Avalonia.Controls;
 using Declutterer.UI.ViewModels;
+using Declutterer.Utilities.Extensions;
 
 namespace Declutterer.UI.Views;
 
@@ -10,6 +11,13 @@ public partial class ScanOptionsWindow : Window
     {
         InitializeComponent();
     }
+
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        this.FitToScreen(0.30, 0.80);
+    }
+
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);

@@ -10,10 +10,10 @@ using Avalonia.Input.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Declutterer.Abstractions;
+using Declutterer.Domain.Models;
 using Declutterer.Domain.Services.Deletion;
 using Declutterer.Utilities.Helpers;
 using Serilog;
-using TreeNode = Declutterer.Domain.Models.TreeNode;
 
 namespace Declutterer.UI.ViewModels;
 

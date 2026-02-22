@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Declutterer.Abstractions;
+using Declutterer.Domain.Models;
 using Declutterer.Utilities.Helpers;
-using TreeNode = Declutterer.Domain.Models.TreeNode;
 
 namespace Declutterer.UI.Services.Commands;
 

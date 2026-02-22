@@ -5,9 +5,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Declutterer.Abstractions;
+using Declutterer.Domain.Models;
 using Declutterer.Utilities.Helpers;
 using Serilog;
-using TreeNode = Declutterer.Domain.Models.TreeNode;
 
 namespace Declutterer.UI.Services.Icons;
 
