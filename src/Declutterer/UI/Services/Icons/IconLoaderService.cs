@@ -97,19 +97,17 @@ public class IconLoaderService : IIconLoader
         });
     }
 
-    //TODO this does not work, tried on Ubuntu:latest
     private static Task<Bitmap?> LoadLinuxIconAsync(string fullPath, bool isDirectory)
     {
         return Task.Run(() =>
         {
             try
             {
-                // Try using 'gio' (GIO - GLib I/O) to get the file's icon
-                // This works with most Linux desktop environments (GNOME, KDE, etc.)
+                // Try using 'gio' (GIO - GLib I/O) to get the file's icon names
                 var processInfo = new ProcessStartInfo
                 {
                     FileName = "/usr/bin/gio",
-                    Arguments = $"info -a standard::icon '{fullPath}'",
+                    Arguments = $"info -a standard::icon \"{fullPath}\"",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -118,24 +116,33 @@ public class IconLoaderService : IIconLoader
 
                 using (var process = Process.Start(processInfo))
                 {
-                    if (process == null)
-                        return null;
-
-                    var output = process.StandardOutput.ReadToEnd();
-                    process.WaitForExit(5000);
-
-                    // Try to extract icon name from GIO output
-                    if (output.Contains("icon: "))
+                    if (process != null)
                     {
-                        var iconName = output.Split("icon: ")[1]?.Split('\n')[0]?.Trim();
-                        if (!string.IsNullOrEmpty(iconName))
+                        var output = process.StandardOutput.ReadToEnd();
+                        process.WaitForExit(5000);
+
+                        // gio output format: "  standard::icon: icon-name-1 icon-name-2 ..."
+                        const string marker = "standard::icon:";
+                        var markerIndex = output.IndexOf(marker, StringComparison.Ordinal);
+                        if (markerIndex >= 0)
                         {
-                            return LoadLinuxIconFromTheme(iconName);
+                            var iconLine = output[(markerIndex + marker.Length)..]
+                                .Split('\n')[0]
+                                .Trim();
+
+                            // gio may return multiple space-separated icon names in priority order
+                            var iconNames = iconLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                            foreach (var name in iconNames)
+                            {
+                                var bitmap = LoadLinuxIconFromTheme(name);
+                                if (bitmap != null)
+                                    return bitmap;
+                            }
                         }
                     }
                 }
 
-                // Fallback: Use file extension to determine icon
+                // Fallback: derive icon name from file extension or directory flag
                 return LoadLinuxIconFromExtension(fullPath, isDirectory);
             }
             catch
@@ -149,36 +156,66 @@ public class IconLoaderService : IIconLoader
     {
         try
         {
-            // Common icon theme paths on Linux
-            var iconThemePaths = new[]
+            // Search order: user theme overrides first, then system themes
+            var home = Environment.GetEnvironmentVariable("HOME") ?? string.Empty;
+
+            var themeDirs = new[]
             {
-                "/usr/share/icons/hicolor/32x32/apps",
-                "/usr/share/icons/hicolor/64x64/apps",
-                "/usr/share/pixmaps",
-                $"{Environment.GetEnvironmentVariable("HOME")}/.local/share/icons/hicolor/32x32/apps"
+                Path.Combine(home, ".local/share/icons/hicolor"),
+                "/usr/share/icons/hicolor",
+                "/usr/share/icons/Adwaita",
+                "/usr/share/icons/gnome",
+                "/usr/share/icons/oxygen",
             };
 
-            foreach (var themePath in iconThemePaths)
+            var sizes = new[] { "32x32", "24x24", "48x48", "16x16", "scalable" };
+            var categories = new[] { "mimetypes", "places", "apps", "actions", "categories", "status" };
+            var formats = new[] { ".png", ".jpg" }; // skip SVG — Avalonia requires extra work to rasterise
+
+            foreach (var themeDir in themeDirs)
             {
-                if (!Directory.Exists(themePath))
+                if (!Directory.Exists(themeDir))
                     continue;
 
-                // Try common image formats
-                var formats = new[] { ".png", ".svg", ".jpg", ".xpm" };
-                foreach (var format in formats)
+                foreach (var size in sizes)
                 {
-                    var iconPath = Path.Combine(themePath, iconName + format);
-                    if (File.Exists(iconPath) && format != ".svg") // Skip SVG for now
+                    foreach (var category in categories)
                     {
-                        try
-                        {
-                            return new Bitmap(iconPath);
-                        }
-                        catch
-                        {
+                        var dir = Path.Combine(themeDir, size, category);
+                        if (!Directory.Exists(dir))
                             continue;
+
+                        foreach (var format in formats)
+                        {
+                            var iconPath = Path.Combine(dir, iconName + format);
+                            if (!File.Exists(iconPath))
+                                continue;
+                            try
+                            {
+                                return new Bitmap(iconPath);
+                            }
+                            catch
+                            {
+                                // file exists but is unreadable — try next
+                            }
                         }
                     }
+                }
+            }
+
+            // Also check /usr/share/pixmaps (flat directory, no size/category subdirs)
+            foreach (var format in new[] { ".png", ".jpg" })
+            {
+                var pixmapPath = Path.Combine("/usr/share/pixmaps", iconName + format);
+                if (!File.Exists(pixmapPath))
+                    continue;
+                try
+                {
+                    return new Bitmap(pixmapPath);
+                }
+                catch
+                {
+                    // continue
                 }
             }
 
@@ -196,31 +233,22 @@ public class IconLoaderService : IIconLoader
         {
             if (isDirectory)
             {
-                // Try to load a generic folder icon
-                var folderIconPath = "/usr/share/pixmaps/folder.png";
-                if (File.Exists(folderIconPath))
-                    return new Bitmap(folderIconPath);
+                return LoadLinuxIconFromTheme("folder");
             }
-            else
+
+            var extension = Path.GetExtension(fullPath).ToLowerInvariant();
+            var iconName = extension switch
             {
-                var extension = Path.GetExtension(fullPath).ToLowerInvariant();
-                var iconName = extension switch
-                {
-                    ".txt" => "text",
-                    ".pdf" => "pdf",
-                    ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" => "image",
-                    ".mp3" or ".flac" or ".wav" or ".ogg" => "audio",
-                    ".mp4" or ".avi" or ".mkv" or ".mov" => "video",
-                    ".zip" or ".tar" or ".gz" or ".rar" => "archive",
-                    _ => "document"
-                };
+                ".txt" or ".log" or ".md" => "text-x-generic",
+                ".pdf"                   => "application-pdf",
+                ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" => "image-x-generic",
+                ".mp3" or ".flac" or ".wav" or ".ogg" or ".aac" => "audio-x-generic",
+                ".mp4" or ".avi" or ".mkv" or ".mov" or ".webm" => "video-x-generic",
+                ".zip" or ".tar" or ".gz" or ".bz2" or ".xz" or ".rar" or ".7z" => "package-x-generic",
+                _                        => "text-x-generic"
+            };
 
-                var pixmapsPath = $"/usr/share/pixmaps/{iconName}.png";
-                if (File.Exists(pixmapsPath))
-                    return new Bitmap(pixmapsPath);
-            }
-
-            return null;
+            return LoadLinuxIconFromTheme(iconName);
         }
         catch
         {

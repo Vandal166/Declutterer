@@ -6,6 +6,5 @@ public interface IExplorerLauncher
     /// Opens the specified path in the system's file explorer.
     /// </summary>
     /// <param name="path">The file or directory path to open</param>
-    /// <returns>A task that completes when the explorer has been launched</returns>
     void OpenInExplorer(string path);
-} //TODO implement this for linux and macos, currently only windows is supported
+}
