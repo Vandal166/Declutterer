@@ -342,11 +342,11 @@ public sealed partial class CleanupWindowViewModel : ViewModelBase, IContextMenu
         if(ItemsToDelete.Count == 0)
             return;
         
-        // Filter to only top-level items (exclude items nested within other items)
-        // This prevents double-counting sizes when both a parent and child directory are selected
-        var topLevelItems = TreeNodeHelper.GetTopLevelItems(ItemsToDelete); 
-        //TODO: ^^ if an large directory has an 'large file' inside, then the parent directory will be categorized as both 'large directory' and 'large file' - visually displaying twice
-        // visually displaying twice is fine as long as the entry matches the group(file vs directory)
+        // Filter to only top-level items (exclude items nested within other items).
+        // This prevents double-counting sizes when both a parent and child are selected.
+        // Items are then categorised by IsDirectory so that a large directory never
+        // appears in the 'large files' group and vice-versa.
+        var topLevelItems = TreeNodeHelper.GetTopLevelItems(ItemsToDelete);
         
         var now = DateTime.Now;
         var largeFilesList = new List<TreeNode>();

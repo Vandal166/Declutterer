@@ -15,6 +15,7 @@ using Declutterer.UI.Services.Workflow;
 using Declutterer.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
+using System.Runtime.InteropServices;
 
 namespace Declutterer.Application;
 
@@ -43,7 +44,13 @@ public static class DependencyInjection
         collection.AddSingleton<SmartSelectionScorer>();
         collection.AddSingleton<SmartSelectionService>();
         
-        collection.AddSingleton<IExplorerLauncher, WindowsExplorerLauncher>();
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            collection.AddSingleton<IExplorerLauncher, WindowsExplorerLauncher>();
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            collection.AddSingleton<IExplorerLauncher, MacOSExplorerLauncher>();
+        else
+            collection.AddSingleton<IExplorerLauncher, LinuxExplorerLauncher>();
+        
         collection.AddSingleton<IErrorDialogService, ErrorDialogService>();
         collection.AddSingleton<IConfirmationDialogService, ConfirmationDialogService>();
         collection.AddSingleton<IDeletionHistoryRepository, DeletionHistoryRepository>();
