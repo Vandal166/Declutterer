@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Runtime.InteropServices;
 using Declutterer.Abstractions;
 using Declutterer.Domain.Services.Deletion;
 using Declutterer.Tests.Helpers;
@@ -97,16 +96,6 @@ public class DeleteServiceTests : IDisposable
             _service.DeletePermanentlyAsync(items, cancellationToken: cts.Token));
     }
 
-    [Fact]
-    public void ValidatePathSafety_CriticalSystemPath_ThrowsOperationFailedException()
-    {
-        var criticalPath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? @"C:\Windows\System32\kernel32.dll"
-            : "/etc/hostname";
-
-        Assert.Throws<OperationFailedException>(() =>
-            DeleteService.ValidatePathSafety(criticalPath));
-    }
 
     [Fact]
     public async Task DeletePermanentlyAsync_MultipleNonExistentPaths_RecordsAllFailures()

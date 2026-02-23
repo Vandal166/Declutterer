@@ -120,13 +120,13 @@ public sealed class DeleteService : IDeleteService
                 // Permanently delete the item
                 if (File.Exists(path))
                 {
-                    ValidatePathSafety(path);
+                    PathSafetyValidator.Validate(path);
                     File.Delete(path);
                     Log.Information("Permanently deleted file: {Path}", path);
                 }
                 else if (Directory.Exists(path))
                 {
-                    ValidatePathSafety(path);
+                    PathSafetyValidator.Validate(path);
                     Directory.Delete(path, recursive: true);
                     Log.Information("Permanently deleted directory: {Path}", path);
                 }
@@ -174,7 +174,7 @@ public sealed class DeleteService : IDeleteService
     /// </summary>
     private static async Task MoveToRecycleBinAsync(string path)
     {
-        ValidatePathSafety(path);
+        PathSafetyValidator.Validate(path);
 
         if (!File.Exists(path) && !Directory.Exists(path))
         {
@@ -347,125 +347,6 @@ public sealed class DeleteService : IDeleteService
         }
     }
     
-    /// <summary>
-    /// Validates that a path is safe to delete and not a critical system directory.
-    /// Throws an exception if the path is deemed unsafe.
-    /// </summary>
-    public static void ValidatePathSafety(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            throw new ArgumentException("Path cannot be null or empty", nameof(path));
-        }
-
-        var normalizedPath = Path.GetFullPath(path).ToLowerInvariant();
-
-        // Critical system paths that should NEVER be deleted
-        // Only check paths relevant to the current platform
-        var criticalSystemPaths = new List<string>();
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            // Windows-specific critical system paths - only OS/system critical paths
-            criticalSystemPaths.AddRange(
-                new[]
-                {
-                    "c:\\windows",
-                    "c:\\program files",
-                    "c:\\program files (x86)",
-                    "c:\\programdata",
-                    "c:\\boot",
-                    "c:\\system",
-                    "c:\\windows\\system32",
-                    "c:\\windows\\syswow64",
-                    "c:\\recovery",
-                    "c:\\$recycle.bin",
-                    "c:\\pagefile.sys",
-                    "c:\\hiberfil.sys",
-                    "c:\\swapfile.sys",
-                    "c:\\documents and settings",
-                    "c:\\system volume information",
-                    "c:\\recycler",
-                    // System user profiles only - NOT the current user's home
-                    "c:\\users\\default",
-                    "c:\\users\\default user",
-                    "c:\\users\\public",
-                    "c:\\users\\all users",
-                });
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            // Linux-specific critical system paths - only OS/system critical paths
-            criticalSystemPaths.AddRange(
-                new[]
-                {
-                    "/bin",
-                    "/sbin",
-                    "/usr/bin",
-                    "/usr/sbin",
-                    "/usr/lib",
-                    "/usr/share",
-                    "/etc",
-                    "/sys",
-                    "/proc",
-                    "/root",
-                    "/boot",
-                    "/lib",
-                    "/lib64",
-                    "/dev",
-                    "/run",
-                    "/lost+found",
-                });
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            // macOS-specific critical system paths - only OS/system critical paths
-            criticalSystemPaths.AddRange(
-                new[]
-                {
-                    "/bin",
-                    "/sbin",
-                    "/usr/bin",
-                    "/usr/sbin",
-                    "/usr/lib",
-                    "/usr/share",
-                    "/etc",
-                    "/sys",
-                    "/proc",
-                    "/boot",
-                    "/lib",
-                    "/dev",
-                    "/run",
-                    "/lost+found",
-                    "/Applications",
-                    "/Library",
-                    "/System",
-                    "/cores",
-                });
-        }
-
-
-        // Check against critical system paths
-        foreach (var dangerousPath in criticalSystemPaths)
-        {
-            var normalizedDangerous = dangerousPath.ToLowerInvariant();
-
-            // On Windows, ensure we're comparing Windows paths properly
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                normalizedDangerous = normalizedDangerous.Replace("/", "\\");
-            }
-
-            // Check if the path is exactly a system directory or a parent directory of it
-            if (normalizedPath == normalizedDangerous ||
-                normalizedPath.StartsWith(normalizedDangerous + Path.DirectorySeparatorChar))
-            {
-                throw new OperationFailedException(
-                    $"Cannot delete system-critical directory: {path}. " +
-                    $"This operation has been blocked for safety reasons.");
-            }
-        }
-    }
 
     /// <summary>
     /// Records a deletion event to the history repository.

@@ -21,6 +21,28 @@ public sealed class DirectoryScanService
     // caching sizes to avoid redundant recursive calculations, <fullPath, size>, OrdinalIgnoreCase for path case-insensitivity on lookups
     private static readonly ConcurrentDictionary<string, long> _sizeCache = new(StringComparer.OrdinalIgnoreCase);
     
+    private static readonly EnumerationOptions DirectoryEnumerationOptions =
+        new EnumerationOptions
+        {
+            IgnoreInaccessible = true,
+            RecurseSubdirectories = false,
+            BufferSize = 64 * 1024, // 64KB buffer for enumeration
+            AttributesToSkip = FileAttributes.System | FileAttributes.Hidden | FileAttributes.Temporary | FileAttributes.Offline |
+                               FileAttributes.Encrypted | FileAttributes.ReparsePoint | FileAttributes.Device,
+            ReturnSpecialDirectories = false
+        };
+    
+    private static readonly EnumerationOptions FileEnumerationOptions =
+        new EnumerationOptions
+        {
+            IgnoreInaccessible = true,
+            RecurseSubdirectories = false,
+            BufferSize = 64 * 1024, // 64KB buffer for enumeration
+            AttributesToSkip = FileAttributes.System | FileAttributes.Hidden | FileAttributes.Temporary | FileAttributes.Offline | FileAttributes.Encrypted | 
+                               FileAttributes.ReparsePoint | FileAttributes.Device | FileAttributes.Directory,
+            ReturnSpecialDirectories = false
+        };
+    
     public DirectoryScanService(ScanFilterService scanFilterService, ILogger<DirectoryScanService> logger)
     {
         _scanFilterService = scanFilterService;
@@ -88,17 +110,8 @@ public sealed class DirectoryScanService
     {
         try
         {
-            var enumerationOptions = new EnumerationOptions
-            {
-                IgnoreInaccessible = true,
-                RecurseSubdirectories = false,
-                BufferSize = 64 * 1024, // 64KB buffer for enumeration
-                AttributesToSkip = FileAttributes.System | FileAttributes.Hidden | FileAttributes.Temporary | FileAttributes.Offline | FileAttributes.Encrypted,
-                ReturnSpecialDirectories = false
-            };
-            
             // Enumerate subdirectories once and cache the result
-            var subdirectories = dirInfo.GetDirectories("*", enumerationOptions);
+            var subdirectories = dirInfo.GetDirectories("*", DirectoryEnumerationOptions);
             
             // getting subdirectories in the current root directory we are in
             foreach (var dir in subdirectories) 
@@ -107,7 +120,7 @@ public sealed class DirectoryScanService
                 {
                     var wrapper = new FileSystemInfoWrapper { Info = dir };
                     
-                    // Apply filter(filtering out nodes that dont match the criteria)
+                    // Apply filter(filtering out nodes that don't match the criteria)
                     if (filter != null && !filter(wrapper))
                         continue;
                     
@@ -124,7 +137,7 @@ public sealed class DirectoryScanService
                         LastAccessed = dir.LastAccessTime,
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
-                        HasChildren = HasAnyChildren(dir, enumerationOptions, filter), // check if the directory has any children to determine if it can be expanded
+                        HasChildren = HasAnyChildren(dir, DirectoryEnumerationOptions, filter), // check if the directory has any children to determine if it can be expanded
                         IsCheckboxSelected = parentNode.IsCheckboxSelected, // inherit selection state from parent
                         IsCheckboxEnabled = !parentNode.IsCheckboxSelected // if parent is selected then disable the checkbox for the child since we dont want to allow unselecting a child when parent is selected, this simplifies the logic and avoids edge cases with selection state
                     };
@@ -149,15 +162,7 @@ public sealed class DirectoryScanService
     {
         try
         {
-            var enumerationOptions = new EnumerationOptions
-            {
-                IgnoreInaccessible = true,
-                RecurseSubdirectories = false,
-                BufferSize = 64 * 1024, // 64KB buffer for enumeration
-                AttributesToSkip = FileAttributes.System | FileAttributes.Hidden | FileAttributes.Temporary | FileAttributes.Offline | FileAttributes.Encrypted,
-                ReturnSpecialDirectories = false
-            };
-            foreach (FileInfo file in dirInfo.GetFiles("*", enumerationOptions))
+            foreach (FileInfo file in dirInfo.GetFiles("*", FileEnumerationOptions))
             {
                 try
                 {
@@ -193,7 +198,6 @@ public sealed class DirectoryScanService
             _logger.LogWarning(e, "Error reading files from: {DirectoryPath}", dirInfo.FullName);
         }
     }
-    
 
     /// <summary>
     /// Parallelized approach for loading subdirectories from a single directory.
@@ -203,17 +207,8 @@ public sealed class DirectoryScanService
     {
         try
         {
-            var enumerationOptions = new EnumerationOptions
-            {
-                IgnoreInaccessible = true,
-                RecurseSubdirectories = false,
-                BufferSize = 64 * 1024, // 64KB buffer for enumeration
-                AttributesToSkip = FileAttributes.System | FileAttributes.Hidden | FileAttributes.Temporary | FileAttributes.Offline | FileAttributes.Encrypted,
-                ReturnSpecialDirectories = false
-            };
-            
             // Enumerate directories once before parallel processing
-            DirectoryInfo[] directories = dirInfo.GetDirectories("*", enumerationOptions);
+            DirectoryInfo[] directories = dirInfo.GetDirectories("*", DirectoryEnumerationOptions);
             var childNodes = new ConcurrentBag<TreeNode>();
             
             Parallel.ForEach(directories, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, dir =>
@@ -238,7 +233,7 @@ public sealed class DirectoryScanService
                         LastAccessed = dir.LastAccessTime,
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
-                        HasChildren = HasAnyChildren(dir, enumerationOptions, filter), // check if the directory has any children to determine if it can be expanded
+                        HasChildren = HasAnyChildren(dir, DirectoryEnumerationOptions, filter), // check if the directory has any children to determine if it can be expanded
                         IsCheckboxSelected = parentNode.IsCheckboxSelected, // inherit selection state from parent
                         IsCheckboxEnabled = !parentNode.IsCheckboxSelected
                     };
@@ -319,20 +314,22 @@ public sealed class DirectoryScanService
         try
         {
             // Add file sizes
-            FileInfo[] fis = dir.GetFiles();
+            FileInfo[] fis = dir.GetFiles("*", SearchOption.TopDirectoryOnly);
             foreach (FileInfo fi in fis) 
             {      
                 size += fi.Length;    
             }
             
             // Add subdirectory sizes
-            DirectoryInfo[] dis = dir.GetDirectories();
+            DirectoryInfo[] dis = dir.GetDirectories("*", SearchOption.TopDirectoryOnly);
             foreach (DirectoryInfo di in dis) 
             {
                 size += CalculateDirectorySize(di);   
             }
         }
         catch (UnauthorizedAccessException) {/* ret 0; when access denied*/}
+        catch (DirectoryNotFoundException) {/* ret 0; when directory not found (e.g., broken symlink)*/}
+        catch (IOException) {/* ret 0; when other IO errors occur*/}
         
         _sizeCache.TryAdd(dir.FullName, size);
         return size;
