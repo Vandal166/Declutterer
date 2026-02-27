@@ -2,14 +2,13 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using Declutterer.Abstractions;
 
 namespace Declutterer.UI.Services.Icons;
 
-public class IconLoaderService : IIconLoader
+public sealed class LinuxIconLoader : IIconLoader
 {
     private static readonly ConcurrentDictionary<string, Bitmap> _iconCache = new();
 
@@ -20,26 +19,16 @@ public class IconLoaderService : IIconLoader
     {
         _iconCache.Clear();
     }
+    
     public async Task<Bitmap?> LoadIconAsync(string fullPath, bool isDirectory = false)
     {
         if (_iconCache.TryGetValue(fullPath, out var cached))
             return cached;
 
         Bitmap? bitmap = null;
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            bitmap = await LoadWindowsIconAsync(fullPath, isDirectory);
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            bitmap = await LoadMacOSIconAsync(fullPath, isDirectory);
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            bitmap = await LoadLinuxIconAsync(fullPath, isDirectory);
-        }
-
+        
+        bitmap = await LoadLinuxIconAsync(fullPath, isDirectory);
+        
         if (bitmap != null)
         {
             _iconCache[fullPath] = bitmap;
@@ -47,56 +36,9 @@ public class IconLoaderService : IIconLoader
 
         return bitmap;
     }
-    
-    private static Task<Bitmap?> LoadMacOSIconAsync(string fullPath, bool isDirectory)
-    {
-        return Task.Run(() =>
-        {
-            try
-            {
-                // Use the 'sips' command-line tool on macOS to convert icon to PNG
-                // This is reliable and doesn't require external dependencies
-                var processInfo = new ProcessStartInfo
-                {
-                    FileName = "/usr/bin/sips",
-                    Arguments = $"-z 32 32 '{fullPath}' --out /tmp/icon_temp.png",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
 
-                using (var process = Process.Start(processInfo))
-                {
-                    if (process == null)
-                        return null;
 
-                    process.WaitForExit(5000); // 5 second timeout
-
-                    if (process.ExitCode == 0 && File.Exists("/tmp/icon_temp.png"))
-                    {
-                        try
-                        {
-                            var bitmap = new Bitmap("/tmp/icon_temp.png");
-                            File.Delete("/tmp/icon_temp.png"); // Clean up temp file
-                            return bitmap;
-                        }
-                        catch
-                        {
-                            File.Delete("/tmp/icon_temp.png");
-                            return null;
-                        }
-                    }
-                }
-
-                return null;
-            }
-            catch
-            {
-                return null;
-            }
-        });
-    }
-
+   
     private static Task<Bitmap?> LoadLinuxIconAsync(string fullPath, bool isDirectory)
     {
         return Task.Run(() =>
@@ -255,54 +197,4 @@ public class IconLoaderService : IIconLoader
             return null;
         }
     }
-    
-    private static Task<Bitmap?> LoadWindowsIconAsync(string fullPath, bool isDirectory)
-    {
-        return Task.Run(() =>
-        {
-            const uint SHGFI_ICON = 0x100;
-            const uint SHGFI_SMALLICON = 0x1;
-
-            uint flags = SHGFI_ICON | SHGFI_SMALLICON; // Use LARGEICON (0x0) if you want 32x32 instead
-            uint attributes = isDirectory ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
-
-            var shinfo = new SHFILEINFO();
-            IntPtr hImg = SHGetFileInfo(fullPath, attributes, ref shinfo, (uint)Marshal.SizeOf(shinfo), flags);
-
-            if (hImg == IntPtr.Zero || shinfo.hIcon == IntPtr.Zero)
-                return null;
-
-            using var icon = System.Drawing.Icon.FromHandle(shinfo.hIcon);
-            using var sysBitmap = icon.ToBitmap();
-            using var memory = new MemoryStream();
-            sysBitmap.Save(memory, System.Drawing.Imaging.ImageFormat.Png);
-            memory.Position = 0;
-
-            DestroyIcon(shinfo.hIcon);
-
-            return new Bitmap(memory);
-        });
-    }
-
-    private const uint FILE_ATTRIBUTE_NORMAL = 0x80;
-    private const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct SHFILEINFO
-    {
-        public IntPtr hIcon;
-        public int iIcon;
-        public uint dwAttributes;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
-        public string szDisplayName;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
-        public string szTypeName;
-    };
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbSizeFileInfo, uint uFlags);
-
-    [DllImport("user32.dll")]
-    private static extern bool DestroyIcon(IntPtr handle);
-
 }

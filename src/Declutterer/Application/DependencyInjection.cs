@@ -33,7 +33,14 @@ public static class DependencyInjection
         collection.AddSingleton<ScanFilterBuilder>();
         collection.AddSingleton<ScanFilterService>();
         collection.AddSingleton<DirectoryScanService>();
-        collection.AddSingleton<IIconLoader, IconLoaderService>();
+        
+        if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            collection.AddSingleton<IIconLoader, WindowsIconLoader>();
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            collection.AddSingleton<IIconLoader, MacOSIconLoader>();
+        else
+            collection.AddSingleton<IIconLoader, LinuxIconLoader>();
+        
         collection.AddSingleton<IconLoadingScheduler>();
         
         collection.AddSingleton<TreeGridInteractionService>();
