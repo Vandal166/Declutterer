@@ -2,6 +2,20 @@
 
 Declutterer is a cross-platform desktop application for scanning, analysing, and cleaning up large or old files and directories. It presents your file system as an interactive tree, lets you filter and score items by size and age, and offers smart auto-selection so that you can identify clutter quickly and delete it either to the Recycle Bin/Trash or permanently.
 
+## Table of Contents
+
+- [Showcase](#showcase)
+- [Functionalities](#functionalities)
+- [Technical Overview](#technical-overview)
+  - [Architecture](#architecture)
+  - [Logging](#logging)
+- [How to Build and Run](#how-to-build-and-run)
+  - [Prerequisites](#prerequisites)
+  - [Build](#build)
+  - [Run](#run)
+  - [Run Tests](#run-tests)
+- [Running from Releases](#running-from-releases)
+
 ## Showcase
 ![showcase](Showcase.gif)
 
@@ -91,3 +105,43 @@ Run a specific test class:
 ```bash
 dotnet test src/Declutterer.Tests/Declutterer.Tests.csproj --filter "FullyQualifiedName~DeleteServiceTests"
 ```
+
+## Running from Releases
+
+Pre-built self-contained executables are provided in the [Releases](https://github.com/Vandal166/Declutterer/releases) section on GitHub. No .NET runtime installation is required - just download, extract, and run.
+
+### Windows
+
+1. Download the `Declutterer-win-x64.zip` file
+2. Extract the archive to any folder
+3. Double-click `Declutterer.exe` to run it.
+
+### Linux
+
+1. Download the `Declutterer-linux-x64.tar.gz` file
+2. Extract the archive:
+   ```bash
+   tar -xzf Declutterer-linux-x64.tar.gz
+    ```
+3. Make the executable runnable (only needed once):
+  ```bash
+  chmod +x Declutterer
+  ```
+  Or: right-click the file → Properties → Permissions → check Allow executing file as program.
+  
+4. Double-click the file to run it.
+
+### macOS
+
+1. Download the `Declutterer-osx-x64.zip`  file
+2. Extract the archive (double-clicking the zip usually works)
+3. Make the executable runnable (only needed once):
+  ```bash
+  chmod +x Declutterer
+  ```
+  Or: right-click the file → Get Info → Sharing & Permissions → make sure your user can Read & Write, then try opening
+  Double-click Declutterer to launch
+
+4. On first run, macOS Gatekeeper may show a warning ("… cannot be opened because the developer cannot be verified").
+Click Cancel, then right-click the file → Open → confirm in the dialog that appears.
+After that it should launch normally on double-click.
