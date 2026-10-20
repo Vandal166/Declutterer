@@ -18,7 +18,7 @@ public class AssessmentConverter : IValueConverter
 
         return parameter as string switch
         {
-            "label" => assessment is null ? string.Empty : $"{assessment.TierLabel} · {(int)Math.Round(assessment.JunkScore * 100)}%",
+            "label" => assessment is null ? string.Empty : $"{assessment.TierLabel} · score {(int)Math.Round(assessment.JunkScore * 100)}/100",
             "brush" => new SolidColorBrush(assessment is null ? Colors.Transparent : ColorFor(assessment.Tier)),
             "tip" => assessment?.Explain(),
             _ => assessment?.Summary,

@@ -22,12 +22,15 @@ public class SmartCleanupSelectorTests
         return n;
     }
 
-    private static JunkAssessment A(CleanupTier tier, double conf = 0.8, bool hard = false) => new()
+    private static JunkAssessment A(CleanupTier tier, double conf = 0.8, bool hard = false,
+        bool safetyComplete = true, string? selectionBlock = null) => new()
     {
         JunkScore = tier >= CleanupTier.Review ? 0.9 : 0.1,
         DeletionRisk = hard ? 0.97 : 0.05,
         Confidence = conf,
         Tier = tier,
+        SelectionSafetyComplete = safetyComplete,
+        SelectionBlockReason = selectionBlock,
         Reasons = hard
             ? new[] { new Signal(ReasonCode.RunningProcess, EvidenceGroup.Ownership, -6, 1, "x", true) }
             : Array.Empty<Signal>(),
@@ -51,6 +54,15 @@ public class SmartCleanupSelectorTests
     public void HardKeepIsNeverEligible_EvenIfTheTierSaysSafe()
     {
         Assert.False(SmartCleanupSelector.IsEligible(A(CleanupTier.Safe, hard: true), SmartSelectMode.Aggressive, Options));
+    }
+
+    [Theory]
+    [InlineData(SmartSelectMode.Conservative)]
+    [InlineData(SmartSelectMode.Balanced)]
+    [InlineData(SmartSelectMode.Aggressive)]
+    public void IncompleteSelectionSafetyBlocksEveryMode(SmartSelectMode mode)
+    {
+        Assert.False(SmartCleanupSelector.IsEligible(A(CleanupTier.Safe, safetyComplete: false), mode, Options));
     }
 
     [Fact]
@@ -104,6 +116,26 @@ public class SmartCleanupSelectorTests
             [parent] = A(CleanupTier.Safe),
             [mid] = A(CleanupTier.Keep),
             [vetoed] = A(CleanupTier.Keep, hard: true),
+            [sibling] = A(CleanupTier.Safe),
+        };
+
+        var plan = new SmartCleanupSelector().Plan(new[] { root }, map, SmartSelectMode.Conservative, Options);
+
+        Assert.DoesNotContain(parent, plan.Selected);
+        Assert.Equal(new[] { sibling }, plan.Selected);
+    }
+
+    [Fact]
+    public void ParentIsNotTaken_WhenLoadedDescendantHasSafetyBlock_AndSiblingRemainsEligible()
+    {
+        var root = Node("root", null);
+        var parent = Node("parent", root);
+        var protectedChild = Node("protected", parent);
+        var sibling = Node("fine", parent);
+        var map = new Dictionary<NodeSnapshot, JunkAssessment>
+        {
+            [parent] = A(CleanupTier.Safe),
+            [protectedChild] = A(CleanupTier.Keep, safetyComplete: false, selectionBlock: "nested sensitive path"),
             [sibling] = A(CleanupTier.Safe),
         };
 

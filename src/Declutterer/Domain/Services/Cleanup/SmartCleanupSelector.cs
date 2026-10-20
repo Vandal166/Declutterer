@@ -17,13 +17,15 @@ public sealed class SelectionPlan
 /// <summary>
 /// Decides which assessed nodes get a ticked checkbox. Top-down: a qualifying node is taken as a whole and its
 /// descendants are skipped (no double counting); a non-qualifying node is opened and its children are considered.
-/// A node is never taken if anything below it carries a veto, even if the node itself looks harmless.
+/// Whole-directory selection requires a complete safety scan, and a node is never taken if anything below it carries
+/// a veto or a safety-scan block.
 /// </summary>
 public sealed class SmartCleanupSelector
 {
     public static bool IsEligible(JunkAssessment a, SmartSelectMode mode, SmartCleanupOptions options)
     {
-        if (a.HasHardKeep || a.Tier is CleanupTier.Protected or CleanupTier.Keep)
+        if (a.HasHardKeep || !a.SelectionSafetyComplete || a.SelectionBlockReason is not null ||
+            a.Tier is CleanupTier.Protected or CleanupTier.Keep)
             return false;
 
         return mode switch
@@ -43,7 +45,8 @@ public sealed class SmartCleanupSelector
         var selected = new List<NodeSnapshot>();
 
         bool IsVeto(NodeSnapshot n) =>
-            assessments.TryGetValue(n, out var a) && (a.HasHardKeep || a.Tier == CleanupTier.Protected);
+            assessments.TryGetValue(n, out var a) &&
+            (a.HasHardKeep || a.Tier == CleanupTier.Protected || a.SelectionBlockReason is not null);
 
         // true if n or any descendant carries a veto
         bool ContainsVeto(NodeSnapshot n)

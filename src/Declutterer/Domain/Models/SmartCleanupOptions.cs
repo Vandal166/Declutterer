@@ -21,7 +21,7 @@ public readonly record struct TierThresholds(double MinJunk, double MaxRisk, dou
 /// </summary>
 public sealed class SmartCleanupOptions
 {
-    /// <summary>Prior probability that a random item in a user folder is junk.</summary>
+    /// <summary>Baseline junk rate assumed by the heuristic scoring model; it is not an empirically measured rate.</summary>
     public double PriorJunk { get; set; } = 0.08;
 
     public TierThresholds Safe { get; set; } = new(0.90, 0.15, 0.75);

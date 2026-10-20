@@ -16,11 +16,11 @@ public class AssessmentConverterTests
     };
 
     [Fact]
-    public void Label_ShowsTierAndJunkPercentage()
+    public void Label_ShowsTierAndHeuristicScore()
     {
         var result = _converter.Convert(Make(CleanupTier.Safe), typeof(string), "label", CultureInfo.InvariantCulture);
 
-        Assert.Equal("Safe to delete · 97%", result);
+        Assert.Equal("Safe to delete · score 97/100", result);
     }
 
     [Fact]

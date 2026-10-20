@@ -4,24 +4,24 @@ Smart Select no longer asks "is this big and old?". It asks four questions about
 
 | Output | Question | Range |
 |---|---|---|
-| **Junk likelihood** | How likely is this unnecessary? | 0–1 |
-| **Deletion risk** | How likely is deleting it to break something or lose valuable data? | 0–1 |
-| **Confidence** | How strong, diverse and consistent is the evidence? | 0–1 |
+| **Junk score** | How strongly does the heuristic evidence point to junk? | 0–1 score |
+| **Deletion-risk estimate** | How strongly do the signals indicate possible harm? | 0–1 estimate |
+| **Evidence strength** | How strong, varied and consistent is the evidence? | 0–1 score |
 | **Reason codes** | Which signals produced the verdict? | list |
 
 The result is shown in the tree (new *Assessment* column, tooltip lists the reasons) and in **Review & Cleanup** (one line per item). Smart Select only ticks checkboxes – nothing is deleted until you confirm in Review & Cleanup, which still defaults to the Recycle Bin.
 
 ## Tiers and modes
 
-| Tier | Junk ≥ | Risk ≤ | Confidence ≥ | Meaning |
+| Tier | Junk score ≥ | Risk estimate ≤ | Evidence strength ≥ | Meaning |
 |---|---|---|---|---|
-| **Safe** | 0.90 | 0.15 | 0.75 | near-certain junk |
-| **Likely** | 0.75 | 0.35 | 0.55 | very probably junk |
-| **Review** | 0.50 | 0.60 | – | possibly junk, look first |
+| **Safe** | 0.90 | 0.15 | 0.75 | meets the most conservative heuristic thresholds |
+| **Likely** | 0.75 | 0.35 | 0.55 | strong heuristic evidence; review before deletion |
+| **Review** | 0.50 | 0.60 | – | possible junk; look first |
 | **Keep** | | | | evidence of use/value, or not enough evidence |
 | **Protected** | | | | system location (never selectable) |
 
-The **mode** selector next to the button picks the cut: *Conservative* = Safe, *Balanced* (default) = Safe + Likely, *Aggressive* = also Review items with confidence ≥ 0.40.
+The **mode** selector next to the button picks the cut: *Conservative* = Safe, *Balanced* (default) = Safe + Likely, *Aggressive* = also Review items with evidence strength ≥ 0.40. These categories use hand-calibrated heuristics and do not represent validated probabilities.
 
 ## "Old" is not "useless"
 
@@ -31,13 +31,13 @@ The **mode** selector next to the button picks the cut: *Conservative* = Safe, *
 
 ## How the numbers are computed
 
-Every rule emits `Signal`s (`ReasonCode`, evidence group, log-likelihood ratio, risk, human-readable detail, optional hard veto).
+Every rule emits `Signal`s (`ReasonCode`, configured evidence family, heuristic score contribution, risk estimate, human-readable detail, optional hard veto).
 
-* **Junk** = `sigmoid(logit(prior 0.08) + Σ evidence)`. Evidence is grouped into independent families – *Location, Pattern, Content, Staleness, Ownership, Structure*. Within a family only the strongest disposable and strongest keep signal count, so correlated evidence (a folder named `Cache` inside a cache location) is never double counted.
-* **Risk** = noisy-OR over the per-family maximum. Any hard veto forces risk ≥ 0.95 and junk ≤ 0.10.
-* **Confidence** = `strength × agreement × diversity × coverage`. Evidence from one family is capped (0.6, or 0.78 if overwhelming); corroboration from other families lifts the cap smoothly, so **Safe always needs a second, independent opinion**. Conflicting evidence lowers *agreement*. *Coverage* drops when a folder could only be partly inspected (budget, unreadable entries) or was not inspected at all.
+* **Junk score** = `sigmoid(logit(prior 0.08) + Σ heuristic evidence)`. Evidence is grouped into configured families – *Location, Pattern, Content, Staleness, Ownership, Structure*. Within a family only the strongest disposable and strongest keep signal count, so correlated evidence (a folder named `Cache` inside a cache location) is not double counted. The family labels are a modeling choice and do not establish statistical independence.
+* **Deletion-risk estimate** = noisy-OR over the per-family maximum. Any hard veto forces the estimate to at least 0.95 and the junk score to at most 0.10.
+* **Evidence strength** = `strength × agreement × diversity × coverage`. Safe explicitly requires positive support from at least two configured evidence families. Conflicting evidence lowers *agreement*. *Coverage* drops when a folder could only be partly inspected (budget, unreadable entries) or was not inspected at all.
 
-### Rules (all independent, all unit tested)
+### Rules (separate heuristics, all unit tested)
 
 | Rule | Detects |
 |---|---|
@@ -56,23 +56,27 @@ Every rule emits `Signal`s (`ReasonCode`, evidence group, log-likelihood ratio, 
 1. Smart Select **only ticks checkboxes**; deletion needs the existing Review & Cleanup confirmation (default: Recycle Bin).
 2. **Hard vetoes** (`HardKeep`) can not be outvoted by any amount of junk evidence.
 3. `PathSafetyValidator` is re-run on everything that could become selectable (fails closed); anything it blocks becomes **Protected**.
-4. The selector never takes a folder if **any loaded descendant carries a veto**, never nests selections, never selects scan roots.
-5. Un-inspected or partially inspected folders cannot reach *Safe* (coverage). A node that was not assessed is never selectable.
-6. Reparse points / junctions are never followed.
+4. Before a directory can be selected whole, a bounded safety-only walk checks every descendant for scoped protections, credentials, sensitive paths, repository metadata, and reparse points. It never follows reparse points.
+5. A directory is not auto-selected in any mode when that safety walk finds a blocker or cannot complete because of a budget, depth limit, unreadable entry, or other access failure. Its children are considered when available in the loaded tree.
+6. The selector also checks loaded descendants for vetoes, never nests selections, and never selects scan roots. A node without a completed selection-safety check is never auto-selected.
 
 ## Speed
 
 Two-stage cascade:
 
-* **Stage A** – metadata only, every loaded node, parallel. Assessed top-down: below a folder that is already a strongly disposable region (cache, temp, `node_modules`) nothing is assessed, because the selector takes that folder whole.
-* **Stage B** – bounded disk inspection (entry cap, depth cap, wall-clock budget, cancellation) **only** for folders stage A could not rule out. Folders proven alive (activity in the last 14 days) stop early. Completed results are memoised and shared between nested folders and between passes.
+* **Stage A** – metadata only, every loaded node, parallel. A strongly disposable folder covers its loaded descendants only after its full descendant safety walk succeeds. If that walk finds a blocker or is incomplete, its loaded children are assessed.
+* **Stage B** – bounded disk inspection (entry cap, depth cap, wall-clock budget, cancellation) for folders stage A could not rule out. Folders proven alive (activity in the last 14 days) may stop their detailed content walk early; a directory that could be selected whole still requires its separate complete safety walk. Completed results are memoised and shared between nested folders and between passes.
 * **Deepening** – junk usually hides one or two levels below what is loaded (`node_modules` inside a project). Big, non-junk, non-vetoed folders are loaded one more level (≤ 3 rounds, ≤ 6 levels, ≤ 150 folders per round) through the existing `ITreeNavigationService`.
 
 Measured on a synthetic profile with 167,800 files (this sandbox, 4 jobs): plain recursive size walk 415 ms; typical tree (133 nodes loaded) 207 ms; **fully expanded tree, 168k nodes loaded** 1.0 s (2.5×). Before top-down pruning the same case took 5.7 s.
 
 ## Tuning
 
-All thresholds and the budget live in `SmartCleanupOptions`; the evidence strengths are the numbers in the rule tables (log-likelihood ratios: +4 ≈ odds ×55). They are hand-calibrated priors – if a verdict ever surprises you, the tooltip tells you exactly which signals produced it, which is the data needed to adjust a number.
+All thresholds and the budget live in `SmartCleanupOptions`; rule strengths are hand-tuned heuristic log-odds contributions. They are not empirically validated likelihood ratios, and the displayed 0–100 values are scores rather than probability percentages. The tooltip lists the signals behind each verdict. Numeric weights stay unchanged until a manually reviewed evaluation set supports a calibration change.
+
+## Evaluation gate
+
+Before describing Smart Select scores as calibrated probabilities or changing weights, evaluate a manually reviewed, held-out candidate set. Report Safe precision and false-safe rate overall and by category, calibration metrics where the reviewed labels support them, and the share of candidates left unresolved. A confirmed valuable or protected candidate in Safe blocks Safe automation for the affected category until its rule is corrected.
 
 ## Known limits / roadmap
 
@@ -80,4 +84,5 @@ All thresholds and the budget live in `SmartCleanupOptions`; the evidence streng
 * Scheduled tasks, Prefetch and jump lists are not consulted yet.
 * App-data name matching is fuzzy; that is why orphans top out at *Likely* (*Review* for Roaming) unless the content itself is disposable.
 * Deletion speed (Recycle Bin of huge folders) is unchanged.
+* Deletion authorization remains path-based. Object identity and descendant contents are not revalidated immediately before recursive deletion; track that as a separate hardening phase.
 * The old `SmartSelectionService` / `SmartSelectionScorer` are no longer used by the UI and can be removed together with their tests.

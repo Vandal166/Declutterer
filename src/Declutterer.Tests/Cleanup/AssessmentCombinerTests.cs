@@ -67,6 +67,15 @@ public class AssessmentCombinerTests
     }
 
     [Fact]
+    public void OneFamilyCannotReachSafe_EvenWhenItsConfidenceWouldExceedTheThreshold()
+    {
+        var a = Combine(S(EvidenceGroup.Location, 100.0, 0.01));
+
+        Assert.True(a.Confidence >= Options.Safe.MinConfidence);
+        Assert.Equal(CleanupTier.Likely, a.Tier);
+    }
+
+    [Fact]
     public void TwoFamilies_WithLowRisk_ReachSafe()
     {
         var a = Combine(S(EvidenceGroup.Location, 4.6, 0.03), S(EvidenceGroup.Staleness, 1.5));

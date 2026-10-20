@@ -181,6 +181,129 @@ public class JunkAssessmentScenarioTests : IDisposable
         Assert.DoesNotContain("AppData/Local/Temp/old-extract", r.Selected(SmartSelectMode.Aggressive));
     }
 
+    [Fact]
+    public void NestedSensitivePathBlocksDisposableAncestor_ButCleanSiblingRemainsSelectable()
+    {
+        _s.File("AppData/Local/Temp/cache/user/.ssh/config", 800, 1700);
+        _s.File("AppData/Local/Temp/cache/user/.ssh/id_rsa", 800, 3000);
+        _s.File("AppData/Local/Temp/clean-cache/old.tmp", 800, 2000);
+
+        var r = _s.Run();
+
+        Assert.NotNull(r["AppData/Local/Temp/cache"].SelectionBlockReason);
+        Assert.DoesNotContain("AppData/Local/Temp/cache", r.Selected(SmartSelectMode.Aggressive));
+        Assert.Contains("AppData/Local/Temp/clean-cache", r.Selected(SmartSelectMode.Conservative));
+    }
+
+    [Fact]
+    public void NestedGitRepositoryBlocksDisposableAncestor_ButCleanSiblingRemainsSelectable()
+    {
+        _s.File("AppData/Local/Temp/cache/vendor/app/.git/HEAD", 800, 400);
+        _s.File("AppData/Local/Temp/cache/vendor/app/source.dat", 800, 1200);
+        _s.File("AppData/Local/Temp/clean-cache/old.tmp", 800, 2000);
+
+        var r = _s.Run();
+
+        Assert.Contains("Git repository metadata", r["AppData/Local/Temp/cache"].SelectionBlockReason);
+        Assert.DoesNotContain("AppData/Local/Temp/cache", r.Selected(SmartSelectMode.Aggressive));
+        Assert.Contains("AppData/Local/Temp/clean-cache", r.Selected(SmartSelectMode.Conservative));
+    }
+
+    [Fact]
+    public void NestedContainerRootBlocksDisposableAncestor_ButNotItsSibling()
+    {
+        _s.Machine.ContainerRoots.Add(_s.Abs("AppData/Local/Temp/cache/persistent"));
+        _s.File("AppData/Local/Temp/cache/persistent/state.dat", 800, 2000);
+        _s.File("AppData/Local/Temp/cache/ordinary/old.tmp", 800, 2000);
+        _s.File("AppData/Local/Temp/clean-cache/old.tmp", 800, 2000);
+
+        var r = _s.Run();
+
+        Assert.Contains("ContainerFolder", r["AppData/Local/Temp/cache"].SelectionBlockReason);
+        Assert.DoesNotContain("AppData/Local/Temp/cache", r.Selected(SmartSelectMode.Aggressive));
+        Assert.Contains("AppData/Local/Temp/cache/ordinary", r.Selected(SmartSelectMode.Conservative));
+        Assert.Contains("AppData/Local/Temp/clean-cache", r.Selected(SmartSelectMode.Conservative));
+    }
+
+    [Theory]
+    [InlineData("running")]
+    [InlineData("installed")]
+    public void RunningOrInstalledDescendantBlocksDisposableAncestor(string protection)
+    {
+        var executable = _s.File("AppData/Local/Temp/cache/app/current.exe", 800, 4000);
+        _s.File("AppData/Local/Temp/clean-cache/old.tmp", 800, 2000);
+        if (protection == "running")
+            _s.Machine.RunningExecutables.Add(executable);
+        else
+            _s.Machine.InstalledApps.Add(new InstalledApp("Example App", "Example", new[] { _s.Abs("AppData/Local/Temp/cache/app") }));
+
+        var r = _s.Run();
+
+        Assert.Contains(r["AppData/Local/Temp/cache"].Reasons, reason =>
+            reason.Code == (protection == "running" ? ReasonCode.RunningProcess : ReasonCode.InstalledApplication) && reason.HardKeep);
+        Assert.DoesNotContain("AppData/Local/Temp/cache", r.Selected(SmartSelectMode.Aggressive));
+        Assert.Contains("AppData/Local/Temp/clean-cache", r.Selected(SmartSelectMode.Conservative));
+    }
+
+    [Theory]
+    [InlineData(SmartSelectMode.Conservative)]
+    [InlineData(SmartSelectMode.Balanced)]
+    [InlineData(SmartSelectMode.Aggressive)]
+    public void IncompleteSafetyScanBlocksWholeDirectorySelectionInEveryMode(SmartSelectMode mode)
+    {
+        _s.Options.MaxEntriesPerDirectory = 1;
+        _s.File("AppData/Local/Temp/cache/a.tmp", 800, 2000);
+        _s.File("AppData/Local/Temp/cache/b.tmp", 800, 2000);
+
+        var r = _s.Run();
+
+        Assert.NotNull(r["AppData/Local/Temp/cache"].SelectionBlockReason);
+        Assert.DoesNotContain("AppData/Local/Temp/cache", r.Selected(mode));
+    }
+
+    [Theory]
+    [InlineData(SmartSelectMode.Conservative)]
+    [InlineData(SmartSelectMode.Balanced)]
+    [InlineData(SmartSelectMode.Aggressive)]
+    public void DepthLimitedSafetyScanBlocksWholeDirectorySelectionInEveryMode(SmartSelectMode mode)
+    {
+        _s.Options.MaxDepth = 1;
+        _s.File("AppData/Local/Temp/cache/nested/old.tmp", 800, 2000);
+
+        var r = _s.Run();
+
+        Assert.Contains("depth limit", r["AppData/Local/Temp/cache"].SelectionBlockReason);
+        Assert.DoesNotContain("AppData/Local/Temp/cache", r.Selected(mode));
+    }
+
+    [Theory]
+    [InlineData(SmartSelectMode.Conservative)]
+    [InlineData(SmartSelectMode.Balanced)]
+    [InlineData(SmartSelectMode.Aggressive)]
+    public void TimedOutSafetyScanBlocksWholeDirectorySelectionInEveryMode(SmartSelectMode mode)
+    {
+        _s.Options.TimeBudget = TimeSpan.Zero;
+        _s.File("AppData/Local/Temp/cache/old.tmp", 800, 2000);
+
+        var r = _s.Run();
+
+        Assert.Contains("time budget", r["AppData/Local/Temp/cache"].SelectionBlockReason);
+        Assert.DoesNotContain("AppData/Local/Temp/cache", r.Selected(mode));
+    }
+
+    [Fact]
+    public void BuildOutputInsideKeptRepositoryRemainsIndependentlySelectable()
+    {
+        _s.File("Code/legacy/.git/HEAD", 1000, 200);
+        _s.File("Code/legacy/App.csproj", 1000, 300);
+        _s.File("Code/legacy/bin/Debug/app.dll", 1000, 8000);
+
+        var r = _s.Run();
+
+        Assert.Equal(CleanupTier.Keep, r.Tier("Code/legacy"));
+        Assert.Contains("Code/legacy/bin", r.Selected(SmartSelectMode.Conservative));
+    }
+
     // ── disposable locations ───────────────────────────────────────────────
 
     [Fact]
@@ -480,7 +603,8 @@ public class JunkAssessmentScenarioTests : IDisposable
             Assert.InRange(a.JunkScore, 0.0, 1.0);
             Assert.InRange(a.DeletionRisk, 0.0, 1.0);
             Assert.InRange(a.Confidence, 0.0, 1.0);
-            Assert.Contains("%", a.Summary);
+            Assert.Contains("junk score", a.Summary);
+            Assert.Contains("risk estimate", a.Summary);
         }
     }
 

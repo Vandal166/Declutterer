@@ -8,12 +8,11 @@ namespace Declutterer.Domain.Services.Cleanup;
 /// <summary>
 /// Turns a bag of <see cref="Signal"/>s into the three numbers the user cares about.
 ///
-///  • Junk likelihood  = sigmoid( logit(prior) + Σ per-group evidence ). Inside a group only the strongest
+///  • Junk score       = sigmoid( logit(prior) + Σ per-group evidence ). Inside a group only the strongest
 ///    disposable and the strongest keep signal count, so correlated evidence is never double counted.
-///  • Deletion risk    = noisy-OR over the per-group maximum risk, floored at 0.95 by any hard veto.
-///  • Confidence       = evidence strength × agreement × diversity × coverage. Evidence from a single family
-///    (e.g. "old") is capped and only lifted by corroboration from other families, so age alone can never
-///    produce a confident verdict and "Safe" always needs a second, independent opinion.
+///  • Deletion risk estimate = noisy-OR over the per-group maximum risk, floored at 0.95 by any hard veto.
+///  • Evidence strength = evidence strength × agreement × diversity × coverage. Safe also requires positive
+///    support from at least two configured evidence families.
 /// </summary>
 public sealed class AssessmentCombiner
 {
@@ -43,7 +42,7 @@ public sealed class AssessmentCombiner
             isProtected |= s.Code == ReasonCode.SystemProtected;
         }
 
-        // ── junk likelihood ────────────────────────────────────────────────
+        // ── heuristic junk score ──────────────────────────────────────────
         double prior = Math.Clamp(_options.PriorJunk, 0.001, 0.999);
         double logit = Math.Log(prior / (1 - prior));
         var net = new double[GroupCount];
@@ -90,6 +89,7 @@ public sealed class AssessmentCombiner
 
         double strength = 1.0 - Math.Exp(-support / 2.5);
         double agreement = support + oppose > 0 ? support / (support + oppose) : 0;
+        int positiveFamilyCount = net.Count(n => n > 0);
 
         // Diversity: evidence from one family is capped (0.60, or 0.78 when that single family is overwhelming).
         // Every bit of corroboration from OTHER families lifts the cap smoothly, so "Safe" needs a second opinion
@@ -103,7 +103,7 @@ public sealed class AssessmentCombiner
 
         var tier = isProtected ? CleanupTier.Protected
             : hardKeep ? CleanupTier.Keep
-            : Classify(junk, deletionRisk, confidence);
+            : Classify(junk, deletionRisk, confidence, positiveFamilyCount);
 
         return new JunkAssessment
         {
@@ -120,9 +120,9 @@ public sealed class AssessmentCombiner
         };
     }
 
-    private CleanupTier Classify(double junk, double risk, double confidence)
+    private CleanupTier Classify(double junk, double risk, double confidence, int positiveFamilyCount)
     {
-        if (Meets(_options.Safe, junk, risk, confidence)) return CleanupTier.Safe;
+        if (positiveFamilyCount >= 2 && Meets(_options.Safe, junk, risk, confidence)) return CleanupTier.Safe;
         if (Meets(_options.Likely, junk, risk, confidence)) return CleanupTier.Likely;
         if (Meets(_options.Review, junk, risk, confidence)) return CleanupTier.Review;
         return CleanupTier.Keep;

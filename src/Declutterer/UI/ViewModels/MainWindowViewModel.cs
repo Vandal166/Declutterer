@@ -148,7 +148,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     private void DeselectAll() => _commandService.DeselectAll(SelectedNodes);
 
     /// <summary>
-    /// Evidence based selection: scores junk likelihood, deletion risk and confidence per item and ticks only what qualifies
+    /// Evidence based selection: computes heuristic junk, deletion-risk and evidence-strength scores, then ticks only what qualifies
     /// for <see cref="SmartSelectMode"/>. It never deletes - the user still reviews and confirms in the cleanup window.
     /// </summary>
     [RelayCommand]

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -21,6 +22,16 @@ public sealed record AnalysisProgress(string Stage, int Done, int Total);
 public sealed class AnalysisSession
 {
     public FactsMemo Memo { get; } = new();
+
+    private readonly ConcurrentDictionary<string, DirectorySafetyScanResult> _safety = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool TryGetSafety(string path, out DirectorySafetyScanResult result) =>
+        _safety.TryGetValue(PathKey.Normalize(path), out result!);
+
+    public void PublishSafety(string path, DirectorySafetyScanResult result)
+    {
+        _safety[PathKey.Normalize(path)] = result;
+    }
 }
 
 public sealed class AnalysisResult
@@ -45,6 +56,7 @@ public sealed class JunkAssessmentEngine
 {
     private readonly IReadOnlyList<IAssessmentRule> _rules;
     private readonly DirectoryFactsCollector _collector;
+    private readonly DirectorySafetyScanner _safetyScanner;
     private readonly Func<string, string?> _safetyGate;
 
     public JunkAssessmentEngine() : this(DefaultRules(), new DirectoryFactsCollector(), DefaultSafetyGate) { }
@@ -53,6 +65,7 @@ public sealed class JunkAssessmentEngine
     {
         _rules = rules.ToList();
         _collector = collector;
+        _safetyScanner = new DirectorySafetyScanner();
         _safetyGate = safetyGate;
     }
 
@@ -113,11 +126,11 @@ public sealed class JunkAssessmentEngine
         var contexts = new List<AssessmentContext>();
         var signals = new List<List<Signal>>();
         var assessments = new List<JunkAssessment>();
+        int safetyBudgetExceeded = 0;
 
         // ── Stage A: metadata only, top-down, level by level ────────────────────
-        // Roots are the folders the user chose to scan; they are never candidates themselves. Below a directory that is
-        // already a strongly disposable, selectable region (cache, temp, node_modules ...) nothing is assessed: the selector
-        // takes such a directory whole, and an unassessed node is simply never selectable (fails safe).
+        // Roots are the folders the user chose to scan; they are never candidates themselves. A strongly disposable
+        // directory can cover its children only after its full descendant safety scan succeeds.
         progress?.Report(new AnalysisProgress("Analyzing metadata", 0, 0));
         var frontier = roots.SelectMany(r => r.Children).ToList();
         while (frontier.Count > 0)
@@ -130,6 +143,20 @@ public sealed class JunkAssessmentEngine
                 results[i] = Evaluate(batch[i], null, machine, options, markers, accessReliable, combiner);
             });
 
+            var stageASafety = new DirectorySafetyScanResult?[batch.Length];
+            Parallel.For(0, batch.Length, po, i =>
+            {
+                if (!batch[i].IsDirectory || results[i].Assessment.HasHardKeep ||
+                    !SignalSink.IsDisposableRegion(results[i].Signals))
+                    return;
+
+                var scan = GetSafetyScan(batch[i], machine, options, session, deadline, cancellationToken);
+                stageASafety[i] = scan;
+                results[i].Assessment = ApplySafetyResult(results[i].Assessment, scan);
+                if (scan.BudgetExceeded)
+                    Interlocked.Exchange(ref safetyBudgetExceeded, 1);
+            });
+
             var next = new List<NodeSnapshot>();
             for (int i = 0; i < batch.Length; i++)
             {
@@ -139,7 +166,8 @@ public sealed class JunkAssessmentEngine
                 assessments.Add(results[i].Assessment);
 
                 bool coveredByThisNode = batch[i].IsDirectory && !results[i].Assessment.HasHardKeep &&
-                                         SignalSink.IsDisposableRegion(results[i].Signals);
+                                         SignalSink.IsDisposableRegion(results[i].Signals) &&
+                                         stageASafety[i]?.CanAutoSelect == true;
                 if (!coveredByThisNode)
                     next.AddRange(batch[i].Children);
             }
@@ -150,7 +178,7 @@ public sealed class JunkAssessmentEngine
 
         // ── Stage B: bounded disk inspection of directories that are not obviously alive ──
         var facts = new DirectoryFacts?[count];
-        bool budgetExceeded = false;
+        int budgetExceeded = safetyBudgetExceeded;
         int inspected = 0, truncated = 0;
 
         if (options.EnableDeepInspection)
@@ -177,7 +205,7 @@ public sealed class JunkAssessmentEngine
 
                 if (DateTime.UtcNow > deadline)
                 {
-                    budgetExceeded = true;
+                    Interlocked.Exchange(ref budgetExceeded, 1);
                     return;
                 }
 
@@ -204,7 +232,7 @@ public sealed class JunkAssessmentEngine
                 if (f.Truncated)
                 {
                     Interlocked.Increment(ref truncated);
-                    if (DateTime.UtcNow > deadline) budgetExceeded = true;
+                    if (DateTime.UtcNow > deadline) Interlocked.Exchange(ref budgetExceeded, 1);
                 }
                 progress?.Report(new AnalysisProgress("Inspecting folders", Interlocked.Increment(ref done), targets.Length));
             });
@@ -216,27 +244,44 @@ public sealed class JunkAssessmentEngine
                 var (ctx, sig, a) = Evaluate(nodes[i], facts[i], machine, options, markers, accessReliable, combiner);
                 contexts[i] = ctx;
                 signals[i] = sig;
-                assessments[i] = a;
+                assessments[i] = session.TryGetSafety(nodes[i].Path, out var safety)
+                    ? ApplySafetyResult(a, safety)
+                    : a;
             });
         }
 
-        // ── Safety gate: re-validate everything that could possibly be selected ──
+        // ── Safety gate: directory candidates need complete descendant coverage; files need a current path check. ──
         progress?.Report(new AnalysisProgress("Validating", 0, count));
         Parallel.For(0, count, po, i =>
         {
-            if (assessments[i].Tier < CleanupTier.Review)
+            if (assessments[i].Tier < CleanupTier.Review && assessments[i].SelectionBlockReason is null)
                 return;
+
+            if (nodes[i].IsDirectory && !assessments[i].HasHardKeep)
+            {
+                var scan = GetSafetyScan(nodes[i], machine, options, session, deadline, cancellationToken);
+                assessments[i] = ApplySafetyResult(assessments[i], scan);
+                if (scan.BudgetExceeded)
+                    Interlocked.Exchange(ref budgetExceeded, 1);
+
+                if (assessments[i].Tier < CleanupTier.Review && assessments[i].SelectionBlockReason is null)
+                    return;
+            }
 
             var blocked = _safetyGate(nodes[i].Path);
             if (blocked is null)
+            {
+                if (!nodes[i].IsDirectory)
+                    assessments[i] = WithSelectionSafety(assessments[i], complete: true, blockReason: null);
                 return;
+            }
 
             var withVeto = new List<Signal>(signals[i])
             {
                 new(ReasonCode.SystemProtected, EvidenceGroup.Ownership, -8.0, 1.0, blocked, HardKeep: true),
             };
             signals[i] = withVeto;
-            assessments[i] = combiner.Combine(contexts[i], withVeto);
+            assessments[i] = WithSelectionSafety(combiner.Combine(contexts[i], withVeto), complete: false, blockReason: blocked);
         });
 
         var map = new Dictionary<NodeSnapshot, JunkAssessment>(count);
@@ -249,10 +294,56 @@ public sealed class JunkAssessmentEngine
             NodesAnalyzed = count,
             DirectoriesInspected = inspected,
             DirectoriesTruncated = truncated,
-            BudgetExceeded = budgetExceeded,
+            BudgetExceeded = budgetExceeded != 0,
             Elapsed = DateTime.UtcNow - started,
         };
     }
+
+    private DirectorySafetyScanResult GetSafetyScan(NodeSnapshot node, ISystemSnapshot machine, SmartCleanupOptions options,
+        AnalysisSession session, DateTime deadline, CancellationToken cancellationToken)
+    {
+        if (session.TryGetSafety(node.Path, out var cached))
+            return cached;
+
+        var result = _safetyScanner.Scan(node.Path, machine, options, deadline, _safetyGate, cancellationToken);
+        session.PublishSafety(node.Path, result);
+        return result;
+    }
+
+    private static JunkAssessment ApplySafetyResult(JunkAssessment assessment, DirectorySafetyScanResult scan)
+    {
+        var tier = assessment.Tier;
+        if (scan.Status == DirectorySafetyStatus.Blocked && tier is not CleanupTier.Protected)
+            tier = CleanupTier.Keep;
+        else if (scan.Status == DirectorySafetyStatus.Incomplete && tier == CleanupTier.Safe)
+            tier = CleanupTier.Review;
+
+        return WithSelectionSafety(WithTier(assessment, tier), scan.CanAutoSelect, scan.BlockReason);
+    }
+
+    private static JunkAssessment WithTier(JunkAssessment assessment, CleanupTier tier) => new()
+    {
+        JunkScore = assessment.JunkScore,
+        DeletionRisk = assessment.DeletionRisk,
+        Confidence = assessment.Confidence,
+        Coverage = assessment.Coverage,
+        Tier = tier,
+        Reasons = assessment.Reasons,
+        SelectionSafetyComplete = assessment.SelectionSafetyComplete,
+        SelectionBlockReason = assessment.SelectionBlockReason,
+    };
+
+    private static JunkAssessment WithSelectionSafety(JunkAssessment assessment, bool complete, string? blockReason) => new()
+    {
+        JunkScore = assessment.JunkScore,
+        DeletionRisk = assessment.DeletionRisk,
+        Confidence = assessment.Confidence,
+        Coverage = assessment.Coverage,
+        Tier = assessment.Tier,
+        Reasons = assessment.Reasons,
+        SelectionSafetyComplete = complete,
+        SelectionBlockReason = blockReason,
+    };
 
     private (AssessmentContext, List<Signal>, JunkAssessment) Evaluate(NodeSnapshot node, DirectoryFacts? facts, ISystemSnapshot machine,
         SmartCleanupOptions options, MarkerCache markers, bool accessReliable, AssessmentCombiner combiner)
