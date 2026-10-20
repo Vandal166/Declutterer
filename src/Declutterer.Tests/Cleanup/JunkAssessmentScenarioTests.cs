@@ -168,6 +168,19 @@ public class JunkAssessmentScenarioTests : IDisposable
         Assert.DoesNotContain(".ssh/known_hosts", selected);
     }
 
+    [Fact]
+    public void CredentialsInsideDisposableFolderStillVetoFolderSelection()
+    {
+        _s.File("AppData/Local/Temp/old-extract/id_rsa", 400, 1700);
+        _s.File("AppData/Local/Temp/old-extract/setup.tmp", 400, 20_000);
+
+        var r = _s.Run();
+
+        Assert.True(r.Has("AppData/Local/Temp/old-extract", ReasonCode.ContainsCredentials), r.Explain("AppData/Local/Temp/old-extract"));
+        Assert.True(r["AppData/Local/Temp/old-extract"].HasHardKeep, r.Explain("AppData/Local/Temp/old-extract"));
+        Assert.DoesNotContain("AppData/Local/Temp/old-extract", r.Selected(SmartSelectMode.Aggressive));
+    }
+
     // ── disposable locations ───────────────────────────────────────────────
 
     [Fact]

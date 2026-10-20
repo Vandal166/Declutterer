@@ -36,7 +36,7 @@ public sealed class SmartSelectionScorer
         Traverse(root, node => 
         {
             maxSize = Math.Max(maxSize, node.Size);
-            var lm = node.LastModified;
+            var lm = node.LastModified?.ToUniversalTime();
             if (oldest == null || lm < oldest) oldest = lm;
             if (newest == null || lm > newest) newest = lm;
         });
@@ -80,7 +80,7 @@ public sealed class SmartSelectionScorer
             return 0.5;
 
         // Determine cutoff date from filter settings
-        DateTime? cutoff = scanOptions.AgeFilter.ModifiedBefore;
+        DateTime? cutoff = scanOptions.AgeFilter.ModifiedBefore?.ToUniversalTime();
         if (!cutoff.HasValue && scanOptions.AgeFilter.MonthsModifiedValue > 0) 
         {
             cutoff = DateTime.UtcNow.AddMonths(-scanOptions.AgeFilter.MonthsModifiedValue);
@@ -89,7 +89,7 @@ public sealed class SmartSelectionScorer
             return 0.5; // neutral
 
         // compute how far node is beyond cutoff in days
-        var deltaDays = (cutoff.Value - node.LastModified.Value).TotalDays; 
+        var deltaDays = (cutoff.Value - node.LastModified.Value.ToUniversalTime()).TotalDays;
         // positive deltaDays => node is older than cutoff (worse/more eligible depending semantics)
         // choose semantic: we want higher score for nodes that are older than the threshold (i.e., match criteria)
         // So normalize based on deltaDays relative to a reasonable 'maxAgeSpan' (use stats.NewestDate - stats.OldestDate or fixed window)

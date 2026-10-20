@@ -18,13 +18,15 @@ public sealed class ScanFilterBuilder
     
     public ScanFilterBuilder WithModifiedDateFilter(DateTime modifiedBefore)
     {
-        _criteria.Add(entry => entry.Info.LastWriteTime < modifiedBefore);
+        var cutoffUtc = modifiedBefore.ToUniversalTime();
+        _criteria.Add(entry => entry.Info.LastWriteTimeUtc < cutoffUtc);
         return this;
     }
     
     public ScanFilterBuilder WithAccessedDateFilter(DateTime accessedBefore)
     {
-        _criteria.Add(entry => entry.Info.LastAccessTime < accessedBefore);
+        var cutoffUtc = accessedBefore.ToUniversalTime();
+        _criteria.Add(entry => entry.Info.LastAccessTimeUtc < cutoffUtc);
         return this;
     }
     

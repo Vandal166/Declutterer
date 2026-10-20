@@ -25,11 +25,10 @@ public sealed class StalenessRule : IAssessmentRule
         if (f is not null && f.NewestActivityUtc > DateTime.MinValue && (last is null || f.NewestActivityUtc > last))
             last = f.NewestActivityUtc;
 
-        // (skipped when no rule found any disposable evidence: age alone can not change a "keep" verdict, and the syscall is not free)
-        if (ctx.Options.UseCreationTime && !ctx.IsDirectory && last is not null && (ctx.NowUtc - last.Value).TotalDays >= 180 &&
-            HasDisposableEvidence(sink))
+        // Check creation time only for files already old enough that a copied timestamp could affect staleness.
+        if (ctx.Options.UseCreationTime && !ctx.IsDirectory && last is not null && (ctx.NowUtc - last.Value).TotalDays >= 180)
         {
-            // Only hit the disk for the one case where creation time can change the verdict.
+            // A copied file may have old write time but recent creation time, so use its newest timestamp.
             var created = ctx.CreationUtc;
             if (created is not null && created > last)
                 last = created;
@@ -74,13 +73,6 @@ public sealed class StalenessRule : IAssessmentRule
                 $"{(accessUsed ? "accessed" : "changed")} {OwnershipRule.Ago(ageDays)}{weakNote}");
         }
         // |llr| < 0.5: ambiguous age -> no signal at all (so it can not inflate confidence)
-    }
-
-    private static bool HasDisposableEvidence(SignalSink sink)
-    {
-        foreach (var s in sink.Signals)
-            if (s.JunkLlr > 0) return true;
-        return false;
     }
 
     public static double Interpolate(double ageDays)

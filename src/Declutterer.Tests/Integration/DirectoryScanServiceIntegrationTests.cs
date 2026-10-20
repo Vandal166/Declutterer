@@ -157,7 +157,7 @@ public class DirectoryScanServiceIntegrationTests : IDisposable
 
         Assert.Single(children);
         var file = children[0];
-        Assert.True(Math.Abs((file.LastModified!.Value - expectedDate).TotalSeconds) < 1);
+        Assert.True(Math.Abs((file.LastModified!.Value.ToUniversalTime() - expectedDate).TotalSeconds) < 1);
     }
 
     [Fact]

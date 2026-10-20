@@ -15,6 +15,13 @@ public sealed class ContentRule : IAssessmentRule
         if (c is null)
             return; // directory that was not inspected -> no content evidence (confidence reflects that)
 
+        // Credentials are always a hard veto, including inside caches, temp folders, or redundant copies.
+        if (c.HasCredentialFile)
+        {
+            sink.Add(ReasonCode.ContainsCredentials, EvidenceGroup.Content, -5.0, 0.97, "contains keys, certificates or password stores", hardKeep: true);
+            return;
+        }
+
         bool disposableContext = sink.InDisposableContext;
         bool inAppData = ctx.IsUnderAppData;
 
@@ -27,13 +34,6 @@ public sealed class ContentRule : IAssessmentRule
 
         if (disposableContext || sink.ContentIsRedundant)
             return; // node_modules is full of source files, a cache may contain anything: the location is the stronger evidence
-
-        // ── credentials / keys: hard veto ──────────────────────────────────
-        if (c.HasCredentialFile)
-        {
-            sink.Add(ReasonCode.ContainsCredentials, EvidenceGroup.Content, -5.0, 0.97, "contains keys, certificates or password stores", hardKeep: true);
-            return;
-        }
 
         // ── user documents / media / databases ─────────────────────────────
         double weight = c.ValuableFileWeight(inAppData);

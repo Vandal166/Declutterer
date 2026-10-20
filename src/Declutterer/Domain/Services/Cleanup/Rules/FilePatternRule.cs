@@ -129,7 +129,7 @@ public sealed class FilePatternRule : IAssessmentRule
             sink.Add(ReasonCode.DuplicateOfSibling, EvidenceGroup.Pattern, 4.0, 0.05, $"identical to '{originalName}'");
     }
 
-    /// <summary>Same length and identical first / middle / last 4 KB. Cheap, and wrong only for adversarial files.</summary>
+    /// <summary>Checks every byte so a partial match can never mark a different file as a safe duplicate.</summary>
     public static bool FilesProbablyIdentical(string a, string b)
     {
         try
@@ -143,26 +143,21 @@ public sealed class FilePatternRule : IAssessmentRule
             if (len == 0)
                 return true;
 
-            const int chunk = 4096;
             using var sa = new FileStream(a, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var sb = new FileStream(b, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
-            long[] offsets = len <= chunk * 3L
-                ? new[] { 0L }
-                : new[] { 0L, Math.Max(0, len / 2 - chunk / 2), Math.Max(0, len - chunk) };
-
-            var bufA = new byte[len <= chunk * 3L ? (int)len : chunk];
+            const int chunk = 64 * 1024;
+            var bufA = new byte[chunk];
             var bufB = new byte[bufA.Length];
-            foreach (var off in offsets)
+            while (true)
             {
-                sa.Seek(off, SeekOrigin.Begin);
-                sb.Seek(off, SeekOrigin.Begin);
                 int ra = ReadFully(sa, bufA);
                 int rb = ReadFully(sb, bufB);
                 if (ra != rb || !bufA.AsSpan(0, ra).SequenceEqual(bufB.AsSpan(0, rb)))
                     return false;
+                if (ra == 0)
+                    return true;
             }
-            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
