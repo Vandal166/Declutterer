@@ -95,7 +95,11 @@
                                 x:Name="LargeDirectoriesListBox">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Border BorderThickness="0" Margin="5,5,0,5">
+                                        <Border
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Margin="5,5,0,5"
+                                            ToolTip.Tip="{Binding Assessment.Details}">
                                             <Grid ColumnDefinitions="Auto,*,Auto">
                                                 <!--  Icon based on file/folder type  -->
                                                 <Image
@@ -107,7 +111,6 @@
                                                 <!--  Item details  -->
                                                 <StackPanel
                                                     Grid.Column="1"
-                                                    IsHitTestVisible="False"
                                                     Orientation="Vertical"
                                                     VerticalAlignment="Center">
                                                     <TextBlock FontWeight="Bold" Text="{Binding Name}" />
@@ -125,8 +128,7 @@
                                                         FontSize="10"
                                                         Foreground="#2D5A2D"
                                                         Text="{Binding Assessment.Summary}"
-                                                        TextWrapping="Wrap"
-                                                        ToolTip.Tip="{Binding Assessment.Details}" />
+                                                        TextWrapping="Wrap" />
                                                 </StackPanel>
                                                 <!--  Remove button  -->
                                                 <Button
@@ -177,7 +179,11 @@
                                 x:Name="LargeFilesListBox">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Border BorderThickness="0" Margin="5,5,0,5">
+                                        <Border
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Margin="5,5,0,5"
+                                            ToolTip.Tip="{Binding Assessment.Details}">
                                             <Grid ColumnDefinitions="Auto,*,Auto">
                                                 <!--  Icon based on file/folder type  -->
                                                 <Image
@@ -189,7 +195,6 @@
                                                 <!--  Item details  -->
                                                 <StackPanel
                                                     Grid.Column="1"
-                                                    IsHitTestVisible="False"
                                                     Orientation="Vertical"
                                                     VerticalAlignment="Center">
                                                     <TextBlock FontWeight="Bold" Text="{Binding Name}" />
@@ -207,8 +212,7 @@
                                                         FontSize="10"
                                                         Foreground="#2D5A2D"
                                                         Text="{Binding Assessment.Summary}"
-                                                        TextWrapping="Wrap"
-                                                        ToolTip.Tip="{Binding Assessment.Details}" />
+                                                        TextWrapping="Wrap" />
                                                 </StackPanel>
                                                 <!--  Remove button  -->
                                                 <Button
@@ -259,7 +263,11 @@
                                 x:Name="OldFilesListBox">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Border BorderThickness="0" Margin="5,5,0,5">
+                                        <Border
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Margin="5,5,0,5"
+                                            ToolTip.Tip="{Binding Assessment.Details}">
                                             <Grid ColumnDefinitions="Auto,*,Auto">
                                                 <!--  Icon based on file/folder type  -->
                                                 <Image
@@ -271,7 +279,6 @@
                                                 <!--  Item details  -->
                                                 <StackPanel
                                                     Grid.Column="1"
-                                                    IsHitTestVisible="False"
                                                     Orientation="Vertical"
                                                     VerticalAlignment="Center">
                                                     <TextBlock FontWeight="Bold" Text="{Binding Name}" />
@@ -289,8 +296,7 @@
                                                         FontSize="10"
                                                         Foreground="#2D5A2D"
                                                         Text="{Binding Assessment.Summary}"
-                                                        TextWrapping="Wrap"
-                                                        ToolTip.Tip="{Binding Assessment.Details}" />
+                                                        TextWrapping="Wrap" />
                                                 </StackPanel>
                                                 <!--  Remove button  -->
                                                 <Button
@@ -341,7 +347,11 @@
                                 x:Name="OtherItemsListBox">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Border BorderThickness="0" Margin="5,5,0,5">
+                                        <Border
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Margin="5,5,0,5"
+                                            ToolTip.Tip="{Binding Assessment.Details}">
                                             <Grid ColumnDefinitions="Auto,*,Auto">
                                                 <!--  Icon based on file/folder type  -->
                                                 <Image
@@ -353,7 +363,6 @@
                                                 <!--  Item details  -->
                                                 <StackPanel
                                                     Grid.Column="1"
-                                                    IsHitTestVisible="False"
                                                     Orientation="Vertical"
                                                     VerticalAlignment="Center">
                                                     <TextBlock FontWeight="Bold" Text="{Binding Name}" />
@@ -371,8 +380,7 @@
                                                         FontSize="10"
                                                         Foreground="#2D5A2D"
                                                         Text="{Binding Assessment.Summary}"
-                                                        TextWrapping="Wrap"
-                                                        ToolTip.Tip="{Binding Assessment.Details}" />
+                                                        TextWrapping="Wrap" />
                                                 </StackPanel>
                                                 <!--  Remove button  -->
                                                 <Button

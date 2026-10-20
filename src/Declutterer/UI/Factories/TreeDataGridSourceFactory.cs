@@ -145,7 +145,9 @@ public static class TreeDataGridSourceFactory
                         var converter = new AssessmentConverter();
                         var textBlock = new TextBlock
                         {
+                            HorizontalAlignment = HorizontalAlignment.Stretch,
                             VerticalAlignment = VerticalAlignment.Center,
+                            TextAlignment = TextAlignment.Center,
                             FontSize = 12,
                             TextTrimming = TextTrimming.CharacterEllipsis,
                         };
@@ -166,7 +168,9 @@ public static class TreeDataGridSourceFactory
                     options: new TemplateColumnOptions<TreeNode>
                     {
                         CanUserResizeColumn = true,
-                        CanUserSortColumn = false,
+                        CanUserSortColumn = true,
+                        CompareAscending = (a, b) => Nullable.Compare(a?.Assessment?.JunkScore, b?.Assessment?.JunkScore),
+                        CompareDescending = (a, b) => Nullable.Compare(b?.Assessment?.JunkScore, a?.Assessment?.JunkScore),
                         MaxWidth = new GridLength(220),
                     }),
 
