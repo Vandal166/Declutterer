@@ -56,6 +56,10 @@ public partial class TreeNode : ObservableObject
     // Children (lazy-initialized) - TreeDataGrid reads this for hierarchical display
     public ObservableCollection<TreeNode> Children { get; private set; } = new();
 
+    /// <summary>Result of the last Smart Select analysis of this node (null if it was not analysed).</summary>
+    [ObservableProperty]
+    private JunkAssessment? _assessment;
+
     [ObservableProperty]
     private Bitmap? _icon = null; // The icon associated with this node (file or folder), loaded asynchronously could be null
 }

@@ -1,9 +1,11 @@
 ﻿using Declutterer.Abstractions;
 using Declutterer.Domain.Services;
+using Declutterer.Domain.Services.Cleanup;
 using Declutterer.Domain.Services.Deletion;
 using Declutterer.Domain.Services.Scanning;
 using Declutterer.Domain.Services.Selection;
 using Declutterer.Integration.ExplorerLauncher;
+using Declutterer.Integration.SystemInfo;
 using Declutterer.UI.Services.Clipboard;
 using Declutterer.UI.Services.Commands;
 using Declutterer.UI.Services.Dialog;
@@ -50,6 +52,18 @@ public static class DependencyInjection
         
         collection.AddSingleton<SmartSelectionScorer>();
         collection.AddSingleton<SmartSelectionService>();
+
+        // evidence based Smart Select (junk likelihood / deletion risk / confidence / reason codes)
+        collection.AddSingleton(_ => new JunkAssessmentEngine());
+        collection.AddSingleton<SmartCleanupSelector>();
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            collection.AddSingleton<ISystemSnapshotProvider, WindowsSystemSnapshotProvider>();
+        else
+            collection.AddSingleton<ISystemSnapshotProvider, DefaultSystemSnapshotProvider>();
+        collection.AddSingleton<ISmartCleanupService>(sp => new SmartCleanupService(
+            sp.GetRequiredService<JunkAssessmentEngine>(), sp.GetRequiredService<SmartCleanupSelector>(),
+            sp.GetRequiredService<ISystemSnapshotProvider>(), sp.GetRequiredService<ITreeNavigationService>(),
+            sp.GetRequiredService<ICommandService>(), sp.GetRequiredService<IDispatcher>()));
         
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             collection.AddSingleton<IExplorerLauncher, WindowsExplorerLauncher>();

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -10,6 +11,7 @@ using Declutterer.Abstractions;
 using Declutterer.Domain.Models;
 using Declutterer.Domain.Services.Deletion;
 using Declutterer.Utilities.Helpers;
+using Serilog;
 using ByteConverter = Declutterer.Utilities.Helpers.ByteConverter;
 using ScanOptions = Declutterer.Domain.Models.ScanOptions;
 using TreeNode = Declutterer.Domain.Models.TreeNode;
@@ -37,6 +39,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     [ObservableProperty]
     private HistoryWindowViewModel _historyViewModel; // ViewModel for the history view
     
+    [ObservableProperty]
+    private SmartSelectMode _smartSelectMode = SmartSelectMode.Balanced; // how aggressively Smart Select ticks checkboxes
+
+    [ObservableProperty]
+    private string _smartSelectSummary = string.Empty; // what the last Smart Select did, shown next to the selection summary
+
+    public IReadOnlyList<SmartSelectMode> SmartSelectModes { get; } = Enum.GetValues<SmartSelectMode>();
+
     public bool IsExpandingAll { get; private set; } = false; // Flag to prevent multiple simultaneous expand/collapse operations
 
     public bool IsTreeDataGridVisible => Roots.Count > 0 && !NoChildrenFound; // The TreeDataGrid is visible if there are roots to display and we didn't just find that there are no children based on the scan options
@@ -48,6 +58,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     private readonly ITreeNavigationService _treeNavigationService;
     private readonly IClipboardService _clipboardService;
     private readonly ISelectionManagementService _selectionManagementService;
+    private readonly ISmartCleanupService _smartCleanupService;
     private readonly EventHandler<PropertyChangedEventArgs>? _selectionChangedHandler;
 
     private ScanOptions? _currentScanOptions;
@@ -63,7 +74,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     public event EventHandler<DeleteResult?>? CleanupWindowClosed;
     
     public MainWindowViewModel(INavigationService navigationService, IScanWorkflowService scanWorkflowService, ITreeNavigationService treeNavigationService,
-        IContextMenuService contextMenuService, ICommandService commandService, IClipboardService clipboardService, ISelectionManagementService selectionManagementService, HistoryWindowViewModel historyViewModel)
+        IContextMenuService contextMenuService, ICommandService commandService, IClipboardService clipboardService, ISelectionManagementService selectionManagementService, HistoryWindowViewModel historyViewModel, ISmartCleanupService smartCleanupService)
     {
         _navigationService = navigationService;
         _scanWorkflowService = scanWorkflowService;
@@ -73,6 +84,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         _clipboardService = clipboardService;
         _selectionManagementService = selectionManagementService;
         _historyViewModel = historyViewModel;
+        _smartCleanupService = smartCleanupService;
 
         // selection change tracking
         SelectedNodes.CollectionChanged += OnSelectedNodesCollectionChanged;
@@ -126,6 +138,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         SelectedNodes.Clear();
         _currentScanOptions = null;
         NoChildrenFound = false;
+        SmartSelectSummary = string.Empty;
     }
     
     [RelayCommand]
@@ -134,8 +147,49 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
     [RelayCommand]
     private void DeselectAll() => _commandService.DeselectAll(SelectedNodes);
 
+    /// <summary>
+    /// Evidence based selection: scores junk likelihood, deletion risk and confidence per item and ticks only what qualifies
+    /// for <see cref="SmartSelectMode"/>. It never deletes - the user still reviews and confirms in the cleanup window.
+    /// </summary>
     [RelayCommand]
-    private void SmartSelect() => _commandService.SmartSelect(Roots, _currentScanOptions, SelectedNodes);
+    private async Task SmartSelectAsync()
+    {
+        if (Roots.Count == 0)
+            return;
+
+        IsAnyNodeLoading = true;
+        SmartSelectSummary = "Analyzing...";
+        try
+        {
+            var result = await _smartCleanupService.SelectAsync(Roots.ToList(), SmartSelectMode, _currentScanOptions, SelectedNodes);
+            SmartSelectSummary = DescribeSmartSelect(result);
+        }
+        catch (OperationCanceledException)
+        {
+            SmartSelectSummary = "Smart Select cancelled.";
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Smart Select failed");
+            SmartSelectSummary = "Smart Select failed: " + ex.Message;
+        }
+        finally
+        {
+            IsAnyNodeLoading = false;
+        }
+    }
+
+    private static string DescribeSmartSelect(SmartCleanupResult r)
+    {
+        if (r.SelectedCount == 0)
+        {
+            return "Nothing qualified. Old items are only suggested when there is evidence they are unused - try Balanced or Aggressive.";
+        }
+
+        var text = $"Selected {r.SelectedCount} items ({ByteConverter.ToReadableString(r.SelectedBytes)}): " +
+                   $"{r.SafeCount} safe, {r.LikelyCount} likely, {r.ReviewCount} to review. Hover a row in the Assessment column for the reasons.";
+        return r.BudgetExceeded ? text + " Time budget reached, some folders were not fully inspected." : text;
+    }
 
     [RelayCommand]
     private async Task ShowScanOptionsWindowAsync()

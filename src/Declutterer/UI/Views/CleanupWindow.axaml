@@ -120,6 +120,13 @@
                                                         FontWeight="{Binding IsSizeBold, Converter={StaticResource BoolToFontWeightConverter}}"
                                                         Foreground="{Binding Size, Converter={StaticResource SizeToBrushConverter}}"
                                                         Text="{Binding SizeFormatted}" />
+                                                    <!--  Why Smart Select picked it (blank for manually selected items)  -->
+                                                    <TextBlock
+                                                        FontSize="10"
+                                                        Foreground="#2D5A2D"
+                                                        Text="{Binding Assessment.Summary}"
+                                                        TextWrapping="Wrap"
+                                                        ToolTip.Tip="{Binding Assessment.Details}" />
                                                 </StackPanel>
                                                 <!--  Remove button  -->
                                                 <Button
@@ -195,6 +202,13 @@
                                                         FontWeight="{Binding IsSizeBold, Converter={StaticResource BoolToFontWeightConverter}}"
                                                         Foreground="{Binding Size, Converter={StaticResource SizeToBrushConverter}}"
                                                         Text="{Binding SizeFormatted}" />
+                                                    <!--  Why Smart Select picked it (blank for manually selected items)  -->
+                                                    <TextBlock
+                                                        FontSize="10"
+                                                        Foreground="#2D5A2D"
+                                                        Text="{Binding Assessment.Summary}"
+                                                        TextWrapping="Wrap"
+                                                        ToolTip.Tip="{Binding Assessment.Details}" />
                                                 </StackPanel>
                                                 <!--  Remove button  -->
                                                 <Button
@@ -270,6 +284,13 @@
                                                         FontWeight="{Binding IsSizeBold, Converter={StaticResource BoolToFontWeightConverter}}"
                                                         Foreground="{Binding Size, Converter={StaticResource SizeToBrushConverter}}"
                                                         Text="{Binding SizeFormatted}" />
+                                                    <!--  Why Smart Select picked it (blank for manually selected items)  -->
+                                                    <TextBlock
+                                                        FontSize="10"
+                                                        Foreground="#2D5A2D"
+                                                        Text="{Binding Assessment.Summary}"
+                                                        TextWrapping="Wrap"
+                                                        ToolTip.Tip="{Binding Assessment.Details}" />
                                                 </StackPanel>
                                                 <!--  Remove button  -->
                                                 <Button
@@ -345,6 +366,13 @@
                                                         FontWeight="{Binding IsSizeBold, Converter={StaticResource BoolToFontWeightConverter}}"
                                                         Foreground="{Binding Size, Converter={StaticResource SizeToBrushConverter}}"
                                                         Text="{Binding SizeFormatted}" />
+                                                    <!--  Why Smart Select picked it (blank for manually selected items)  -->
+                                                    <TextBlock
+                                                        FontSize="10"
+                                                        Foreground="#2D5A2D"
+                                                        Text="{Binding Assessment.Summary}"
+                                                        TextWrapping="Wrap"
+                                                        ToolTip.Tip="{Binding Assessment.Details}" />
                                                 </StackPanel>
                                                 <!--  Remove button  -->
                                                 <Button

@@ -135,6 +135,41 @@ public static class TreeDataGridSourceFactory
                         CompareDescending = (a, b) => b?.Size.CompareTo(a?.Size ?? 0) ?? 0,
                     }),
 
+                new TemplateColumn<TreeNode>("Assessment",
+                    new FuncDataTemplate<TreeNode>((node, _) =>
+                    {
+                        if (node is null)
+                            return null;
+
+                        // Shows the verdict of the last Smart Select run (blank until one ran). The tooltip lists the reasons.
+                        var converter = new AssessmentConverter();
+                        var textBlock = new TextBlock
+                        {
+                            VerticalAlignment = VerticalAlignment.Center,
+                            FontSize = 12,
+                            TextTrimming = TextTrimming.CharacterEllipsis,
+                        };
+                        textBlock.Bind(TextBlock.TextProperty, new Avalonia.Data.Binding("Assessment")
+                        {
+                            Source = node, Converter = converter, ConverterParameter = "label"
+                        });
+                        textBlock.Bind(TextBlock.ForegroundProperty, new Avalonia.Data.Binding("Assessment")
+                        {
+                            Source = node, Converter = converter, ConverterParameter = "brush"
+                        });
+                        textBlock.Bind(ToolTip.TipProperty, new Avalonia.Data.Binding("Assessment")
+                        {
+                            Source = node, Converter = converter, ConverterParameter = "tip"
+                        });
+                        return textBlock;
+                    }, supportsRecycling: false),
+                    options: new TemplateColumnOptions<TreeNode>
+                    {
+                        CanUserResizeColumn = true,
+                        CanUserSortColumn = false,
+                        MaxWidth = new GridLength(220),
+                    }),
+
                 new TextColumn<TreeNode, DateTime?>("Last Modified", x => x.LastModified,
                     options: new TextColumnOptions<TreeNode>
                     {

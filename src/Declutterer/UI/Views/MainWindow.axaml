@@ -396,16 +396,24 @@
             <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" HorizontalAlignment="Stretch">
 
                 <!--  Selection Summary Text  -->
-                <TextBlock
-                    FontSize="14"
-                    Foreground="White"
+                <StackPanel
                     Grid.Column="1"
+                    Orientation="Vertical"
+                    Spacing="2"
                     VerticalAlignment="Center">
-                    <Run FontWeight="Bold" Text="{Binding SelectedNodes.Count}" />
-                    <Run Text=" items selected (" />
-                    <Run FontWeight="Bold" Text="{Binding SelectedNodesSizeText}" />
-                    <Run Text=")" />
-                </TextBlock>
+                    <TextBlock FontSize="14" Foreground="White">
+                        <Run FontWeight="Bold" Text="{Binding SelectedNodes.Count}" />
+                        <Run Text=" items selected (" />
+                        <Run FontWeight="Bold" Text="{Binding SelectedNodesSizeText}" />
+                        <Run Text=")" />
+                    </TextBlock>
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="#BDC3C7"
+                        IsVisible="{Binding SmartSelectSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                        Text="{Binding SmartSelectSummary}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
 
                 <!--  Deselect All Button  -->
                 <Button
@@ -431,16 +439,27 @@
                     Margin="0,0,8,0"
                     Padding="16,8" />
 
-                <!--  Smart Select Button  -->
-                <Button
-                    Background="White"
-                    Command="{Binding SmartSelectCommand}"
-                    Content="Smart Select"
-                    FontSize="13"
+                <!--  Smart Select: mode + button  -->
+                <StackPanel
                     Grid.Column="3"
-                    HorizontalAlignment="Left"
                     Margin="0,0,8,0"
-                    Padding="16,8" />
+                    Orientation="Horizontal"
+                    Spacing="6">
+                    <ComboBox
+                        FontSize="13"
+                        ItemsSource="{Binding SmartSelectModes}"
+                        MinWidth="130"
+                        SelectedItem="{Binding SmartSelectMode}"
+                        ToolTip.Tip="Conservative: only near-certain junk. Balanced: also likely junk. Aggressive: also items you should look at first. Nothing is deleted until you confirm in Review and Cleanup."
+                        VerticalAlignment="Center" />
+                    <Button
+                        Background="White"
+                        Command="{Binding SmartSelectCommand}"
+                        Content="Smart Select"
+                        FontSize="13"
+                        HorizontalAlignment="Left"
+                        Padding="16,8" />
+                </StackPanel>
 
                 <!--  Review & Cleanup Button  -->
                 <Button

@@ -1,6 +1,7 @@
 using Declutterer.Abstractions;
 using Declutterer.Domain.Models;
 using Declutterer.UI.ViewModels;
+using Declutterer.Utilities.Helpers;
 using NSubstitute;
 
 namespace Declutterer.Tests.ViewModels;
@@ -15,6 +16,7 @@ public class MainWindowViewModelTests
     private readonly IClipboardService _clipboardService;
     private readonly ISelectionManagementService _selectionManagementService;
     private readonly HistoryWindowViewModel _historyWindowViewModel;
+    private readonly ISmartCleanupService _smartCleanupService;
     public MainWindowViewModelTests()
     {
         // Setup mocks for all dependencies
@@ -26,6 +28,7 @@ public class MainWindowViewModelTests
         _clipboardService = Substitute.For<IClipboardService>();
         _selectionManagementService = Substitute.For<ISelectionManagementService>();
         _historyWindowViewModel = new HistoryWindowViewModel();
+        _smartCleanupService = Substitute.For<ISmartCleanupService>();
     }
 
     private MainWindowViewModel CreateViewModel()
@@ -38,7 +41,8 @@ public class MainWindowViewModelTests
             _commandService,
             _clipboardService,
             _selectionManagementService,
-            _historyWindowViewModel
+            _historyWindowViewModel,
+            _smartCleanupService
         );
     }
 
@@ -208,6 +212,58 @@ public class MainWindowViewModelTests
             // Expected
         }
 
+        Assert.False(viewModel.IsAnyNodeLoading);
+    }
+
+    [Fact]
+    public async Task SmartSelectCommand_WithoutRoots_DoesNothing()
+    {
+        var viewModel = CreateViewModel();
+
+        await viewModel.SmartSelectCommand.ExecuteAsync(null);
+
+        await _smartCleanupService.DidNotReceiveWithAnyArgs().SelectAsync(default!, default, default, default!, default);
+    }
+
+    [Fact]
+    public async Task SmartSelectCommand_PassesTheChosenMode_AndShowsASummary()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.Roots.Add(new TreeNode { Name = "Root" });
+        viewModel.SmartSelectMode = SmartSelectMode.Aggressive;
+        var loadingDuringCall = false;
+        _smartCleanupService
+            .SelectAsync(Arg.Any<IReadOnlyList<TreeNode>>(), Arg.Any<SmartSelectMode>(), Arg.Any<ScanOptions?>(),
+                Arg.Any<ObservableHashSet<TreeNode>>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                loadingDuringCall = viewModel.IsAnyNodeLoading;
+                return new SmartCleanupResult(3, 3L * 1024 * 1024, 120, 2, 1, 0, false, TimeSpan.FromSeconds(1));
+            });
+
+        await viewModel.SmartSelectCommand.ExecuteAsync(null);
+
+        await _smartCleanupService.Received(1).SelectAsync(Arg.Any<IReadOnlyList<TreeNode>>(), SmartSelectMode.Aggressive,
+            Arg.Any<ScanOptions?>(), viewModel.SelectedNodes, Arg.Any<CancellationToken>());
+        Assert.True(loadingDuringCall);
+        Assert.False(viewModel.IsAnyNodeLoading);
+        Assert.Contains("Selected 3 items", viewModel.SmartSelectSummary);
+        Assert.Contains("3 MB", viewModel.SmartSelectSummary);
+    }
+
+    [Fact]
+    public async Task SmartSelectCommand_WhenTheServiceFails_ReportsItInsteadOfThrowing()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.Roots.Add(new TreeNode { Name = "Root" });
+        _smartCleanupService
+            .SelectAsync(Arg.Any<IReadOnlyList<TreeNode>>(), Arg.Any<SmartSelectMode>(), Arg.Any<ScanOptions?>(),
+                Arg.Any<ObservableHashSet<TreeNode>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<SmartCleanupResult>(new InvalidOperationException("boom")));
+
+        await viewModel.SmartSelectCommand.ExecuteAsync(null);
+
+        Assert.Contains("boom", viewModel.SmartSelectSummary);
         Assert.False(viewModel.IsAnyNodeLoading);
     }
 

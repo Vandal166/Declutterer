@@ -22,7 +22,7 @@ Declutterer is a cross-platform desktop application for scanning, analysing, and
 ## Functionalities
 
 - **Directory scanning** – scan one or more root directories with configurable filters (minimum file/directory size, modified-before date, accessed-before date, include/exclude files).
-- **Smart selection** – automatically scores and selects the top candidates based on weighted size and age criteria.
+- **Smart selection** – evidence based: scores every item for *junk likelihood*, *deletion risk* and *confidence* with explainable reason codes (caches, temp, regenerable build output, leftovers of removed applications, duplicate/extracted/installer files …) and only ticks what qualifies for the chosen mode (Conservative / Balanced / Aggressive). Old is not treated as useless: running programs, installed apps, recent files, git repos, credentials and cloud-synced folders veto selection. See [docs/SmartSelect.md](docs/SmartSelect.md).
 - **Manual selection** – toggle individual nodes or select/deselect all via the tree grid's checkboxes.
 - **Delete to Recycle Bin** – safely moves selected items to the platform Recycle Bin / Trash with progress tracking and cancellation support.
 - **Permanent delete** – irreversibly removes selected items with the same progress/cancellation guarantees.
@@ -54,8 +54,10 @@ src/
 │   │   ├── Services/
 │   │   │   ├── Deletion/      – DeleteService (recycle bin + permanent delete)
 │   │   │   ├── Scanning/      – DirectoryScanService, ScanFilterService
-│   │   │   └── Selection/     – SmartSelectionService, SmartSelectionScorer
+│   │   │   ├── Selection/     – SmartSelectionService, SmartSelectionScorer (legacy size/age scoring)
+│   │   │   └── Cleanup/       – JunkAssessmentEngine, rules, AssessmentCombiner, SmartCleanupSelector
 │   │   └── History/           – DeletionHistoryRepository
+│   ├── Integration/           – OS integration (explorer launchers, SystemInfo: registry/processes/recent items)
 │   ├── UI/
 │   │   ├── ViewModels/        – MainWindowViewModel, CleanupWindowViewModel, …
 │   │   ├── Views/             – XAML windows and controls
