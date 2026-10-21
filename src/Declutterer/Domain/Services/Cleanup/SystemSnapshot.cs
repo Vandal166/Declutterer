@@ -44,7 +44,10 @@ public sealed class SystemSnapshot : ISystemSnapshot
     private readonly string[] _appDataRoots;
     private readonly string[] _syncedRoots;
     private readonly HashSet<string> _containerRoots;
-    private readonly (string Path, string App)[] _installLocations;
+    // Install locations are looked up per path *ancestor* instead of scanning every location for every path:
+    // a Windows machine easily has 300 uninstall entries and the safety scan asks this question for every file.
+    private readonly Dictionary<string, string> _installLocationMap = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _installLocationAncestors = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _runningDirs = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _startupDirs = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _recent = new(StringComparer.OrdinalIgnoreCase);
@@ -64,10 +67,25 @@ public sealed class SystemSnapshot : ISystemSnapshot
                 .Where(p => p.Length > 0),
             StringComparer.OrdinalIgnoreCase);
 
-        _installLocations = data.InstalledApps
-            .SelectMany(a => a.Locations.Select(l => (Path: PathKey.Normalize(l), App: a.Name)))
-            .Where(x => x.Path.Length > 0)
-            .ToArray();
+        foreach (var app in data.InstalledApps)
+        {
+            foreach (var location in app.Locations)
+            {
+                var loc = PathKey.Normalize(location);
+                if (loc.Length == 0)
+                    continue;
+
+                _installLocationMap.TryAdd(loc, app.Name);
+                foreach (var ancestor in PathKey.SelfAndAncestors(loc).Skip(1))
+                    _installLocationAncestors.TryAdd(ancestor, app.Name);
+
+                // SelfAndAncestors stops before the filesystem root (for example, it yields "C:" rather than
+                // "C:\\"). Keep the actual root key so querying a drive/root directory still detects apps below it.
+                var filesystemRoot = PathKey.Normalize(System.IO.Path.GetPathRoot(loc) ?? string.Empty);
+                if (filesystemRoot.Length > 0 && !string.Equals(filesystemRoot, loc, StringComparison.OrdinalIgnoreCase))
+                    _installLocationAncestors.TryAdd(filesystemRoot, app.Name);
+            }
+        }
 
         foreach (var exe in data.RunningExecutables)
             AddDirectoryChain(_runningDirs, exe);
@@ -168,15 +186,22 @@ public sealed class SystemSnapshot : ISystemSnapshot
 
     public bool TryGetInstalledAppAt(string path, out string appName)
     {
-        foreach (var (loc, app) in _installLocations)
+        if (_installLocationMap.Count > 0)
         {
-            // inside the install location, equal to it, or an ancestor that contains it
-            if (PathKey.IsUnderOrEqual(path, loc) || PathKey.IsUnderOrEqual(loc, path))
+            var normalized = PathKey.Normalize(path);
+
+            // inside the install location, or equal to it
+            foreach (var candidate in PathKey.SelfAndAncestors(normalized))
             {
-                appName = app;
-                return true;
+                if (_installLocationMap.TryGetValue(candidate, out appName!))
+                    return true;
             }
+
+            // an ancestor that contains an install location
+            if (_installLocationAncestors.TryGetValue(normalized, out appName!))
+                return true;
         }
+
         appName = string.Empty;
         return false;
     }

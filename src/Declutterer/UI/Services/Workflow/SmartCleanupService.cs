@@ -58,7 +58,8 @@ public sealed class SmartCleanupService : ISmartCleanupService
 
         List<NodeSnapshot> snapshots;
         AnalysisResult analysis;
-        int round = 0;
+        int round = 0, foldersLoaded = 0;
+        bool stoppedByTime = false;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -67,18 +68,35 @@ public sealed class SmartCleanupService : ISmartCleanupService
             snapshots = await _dispatcher.InvokeAsync(() => roots.Select(r => NodeSnapshot.FromTreeNode(r)).ToList());
             analysis = await _engine.AnalyzeAsync(snapshots, machine, _options, null, cancellationToken, session);
 
-            if (round++ >= _options.DeepenMaxRounds || analysis.BudgetExceeded)
+            // A pass that ran out of time used to end the whole run, which meant a big scan was never looked into at all.
+            // Completed facts and safety scans are remembered by the session, so another pass only has to do what is new.
+            if (round++ >= _options.DeepenMaxRounds)
                 break;
+            if (clock.Elapsed >= _options.TotalTimeBudget)
+            {
+                stoppedByTime = true;
+                break;
+            }
 
-            var targets = DeepeningPlanner.SelectTargets(snapshots, analysis.Assessments, _options)
-                .Where(t => attempted.Add(t.Source!))
-                .ToList();
+            var targets = DeepeningPlanner.SelectTargets(snapshots, analysis.Assessments, _options, attempted);
             if (targets.Count == 0)
                 break;
+            foreach (var t in targets)
+                attempted.Add(t.Source!);
 
             Log.Information("Smart Select round {Round}: loading {Count} folders to look inside", round, targets.Count);
             await LoadDeeperAsync(targets, scanOptions, cancellationToken);
+            foldersLoaded += targets.Count;
+            if (clock.Elapsed >= _options.TotalTimeBudget)
+            {
+                stoppedByTime = true;
+                break;
+            }
         }
+
+        // folders that would have been worth opening but were not (round / depth / count limits)
+        int unexplored = DeepeningPlanner.Candidates(snapshots, analysis.Assessments, _options)
+            .Count(t => !attempted.Contains(t.Source!));
 
         var plan = _selector.Plan(snapshots, analysis.Assessments, mode, _options);
 
@@ -103,11 +121,14 @@ public sealed class SmartCleanupService : ISmartCleanupService
 
         clock.Stop();
         Log.Information(
-            "Smart Select ({Mode}): analysed {Analyzed} nodes, inspected {Inspected} folders, selected {Selected} items in {Elapsed} ms",
-            mode, analysis.NodesAnalyzed, analysis.DirectoriesInspected, plan.Selected.Count, clock.ElapsedMilliseconds);
+            "Smart Select ({Mode}): analysed {Analyzed} nodes, inspected {Inspected} folders, selected {Selected} items in {Elapsed} ms " +
+            "(loaded {Loaded} folders, {Unexplored} left unexplored, {IncompleteScans} incomplete safety scans, {NotInspected} not inspected)",
+            mode, analysis.NodesAnalyzed, analysis.DirectoriesInspected, plan.Selected.Count, clock.ElapsedMilliseconds,
+            foldersLoaded, unexplored, analysis.IncompleteSafetyScans, analysis.DirectoriesNotInspected);
 
         return new SmartCleanupResult(plan.Selected.Count, plan.TotalBytes, analysis.NodesAnalyzed, plan.SafeCount, plan.LikelyCount,
-            plan.ReviewCount, analysis.BudgetExceeded, clock.Elapsed);
+            plan.ReviewCount, analysis.BudgetExceeded, clock.Elapsed, foldersLoaded, unexplored, analysis.IncompleteSafetyScans,
+            analysis.DirectoriesNotInspected, stoppedByTime);
     }
 
     private async Task LoadDeeperAsync(IReadOnlyList<NodeSnapshot> targets, ScanOptions? scanOptions, CancellationToken cancellationToken)

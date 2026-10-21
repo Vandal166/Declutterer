@@ -162,7 +162,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         try
         {
             var result = await _smartCleanupService.SelectAsync(Roots.ToList(), SmartSelectMode, _currentScanOptions, SelectedNodes);
-            SmartSelectSummary = DescribeSmartSelect(result);
+            SmartSelectSummary = DescribeSmartSelect(result, hiddenSkipped: _currentScanOptions is { IncludeHidden: false });
         }
         catch (OperationCanceledException)
         {
@@ -179,16 +179,25 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         }
     }
 
-    private static string DescribeSmartSelect(SmartCleanupResult r)
+    public static string DescribeSmartSelect(SmartCleanupResult r, bool hiddenSkipped = false)
     {
-        if (r.SelectedCount == 0)
-        {
-            return "Nothing qualified. Old items are only suggested when there is evidence they are unused - try Balanced or Aggressive.";
-        }
+        var text = r.SelectedCount == 0
+            ? "Nothing qualified. Old items are only suggested when there is evidence they are unused - try Balanced or Aggressive."
+            : $"Selected {r.SelectedCount} items ({ByteConverter.ToReadableString(r.SelectedBytes)}): " +
+              $"{r.SafeCount} safe, {r.LikelyCount} likely, {r.ReviewCount} to review. Hover a row in the Assessment column for the reasons.";
 
-        var text = $"Selected {r.SelectedCount} items ({ByteConverter.ToReadableString(r.SelectedBytes)}): " +
-                   $"{r.SafeCount} safe, {r.LikelyCount} likely, {r.ReviewCount} to review. Hover a row in the Assessment column for the reasons.";
-        return r.BudgetExceeded ? text + " Time budget reached, some folders were not fully inspected." : text;
+        // Say what limited the result, so "found little" can be told apart from "could not look".
+        if (r.BudgetExceeded)
+            text += $" Time budget reached, {r.UninspectedFolders} folders were not inspected.";
+        if (r.StoppedByTimeLimit)
+            text += " Stopped at the overall time limit - run Smart Select again to go deeper (opened folders stay loaded).";
+        if (r.UnexploredFolders > 0)
+            text += $" {r.UnexploredFolders} large folders were not opened (depth / round limit).";
+        if (r.IncompleteSafetyScans > 0)
+            text += $" {r.IncompleteSafetyScans} folders could not be fully safety-checked and were not auto-selected.";
+        if (hiddenSkipped)
+            text += " Hidden folders (AppData, ProgramData, .git, .vs) were not scanned - enable \"Include hidden\" in Scan Settings to find caches and app leftovers.";
+        return text;
     }
 
     [RelayCommand]

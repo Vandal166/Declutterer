@@ -194,6 +194,12 @@
                 <HeaderedContentControl Classes="indented" Header="Other">
                     <StackPanel Spacing="6">
                         <ToggleSwitch Content="Include files" IsChecked="{Binding ScanOptions.IncludeFiles}" />
+                        <ToggleSwitch Content="Include hidden folders and files" IsChecked="{Binding ScanOptions.IncludeHidden}" />
+                        <TextBlock
+                            FontSize="11"
+                            Opacity="0.6"
+                            Text="AppData, ProgramData, .git and .vs are hidden. Smart Select needs them to find caches, temp files and leftovers of removed apps."
+                            TextWrapping="Wrap" />
                     </StackPanel>
                 </HeaderedContentControl>
 

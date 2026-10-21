@@ -21,27 +21,27 @@ public sealed class DirectoryScanService
     // caching sizes to avoid redundant recursive calculations, <fullPath, size>, OrdinalIgnoreCase for path case-insensitivity on lookups
     private static readonly ConcurrentDictionary<string, long> _sizeCache = new(StringComparer.OrdinalIgnoreCase);
     
-    private static readonly EnumerationOptions DirectoryEnumerationOptions =
-        new EnumerationOptions
+    // Hidden is the only attribute that is optional: System, offline, encrypted, device and reparse points are never loaded.
+    private const FileAttributes AlwaysSkipped = FileAttributes.System | FileAttributes.Temporary | FileAttributes.Offline |
+                                                 FileAttributes.Encrypted | FileAttributes.ReparsePoint | FileAttributes.Device;
+
+    private static EnumerationOptions CreateOptions(bool includeHidden, bool skipDirectories) =>
+        new()
         {
             IgnoreInaccessible = true,
             RecurseSubdirectories = false,
             BufferSize = 64 * 1024, // 64KB buffer for enumeration
-            AttributesToSkip = FileAttributes.System | FileAttributes.Hidden | FileAttributes.Temporary | FileAttributes.Offline |
-                               FileAttributes.Encrypted | FileAttributes.ReparsePoint | FileAttributes.Device,
+            AttributesToSkip = AlwaysSkipped | (includeHidden ? 0 : FileAttributes.Hidden) | (skipDirectories ? FileAttributes.Directory : 0),
             ReturnSpecialDirectories = false
         };
-    
-    private static readonly EnumerationOptions FileEnumerationOptions =
-        new EnumerationOptions
-        {
-            IgnoreInaccessible = true,
-            RecurseSubdirectories = false,
-            BufferSize = 64 * 1024, // 64KB buffer for enumeration
-            AttributesToSkip = FileAttributes.System | FileAttributes.Hidden | FileAttributes.Temporary | FileAttributes.Offline | FileAttributes.Encrypted | 
-                               FileAttributes.ReparsePoint | FileAttributes.Device | FileAttributes.Directory,
-            ReturnSpecialDirectories = false
-        };
+
+    private static readonly EnumerationOptions DirectoryOptions = CreateOptions(includeHidden: false, skipDirectories: false);
+    private static readonly EnumerationOptions DirectoryOptionsWithHidden = CreateOptions(includeHidden: true, skipDirectories: false);
+    private static readonly EnumerationOptions FileOptions = CreateOptions(includeHidden: false, skipDirectories: true);
+    private static readonly EnumerationOptions FileOptionsWithHidden = CreateOptions(includeHidden: true, skipDirectories: true);
+
+    private static EnumerationOptions DirectoryEnumerationOptionsFor(bool includeHidden) => includeHidden ? DirectoryOptionsWithHidden : DirectoryOptions;
+    private static EnumerationOptions FileEnumerationOptionsFor(bool includeHidden) => includeHidden ? FileOptionsWithHidden : FileOptions;
     
     public DirectoryScanService(ScanFilterService scanFilterService, ILogger<DirectoryScanService> logger)
     {
@@ -92,9 +92,11 @@ public sealed class DirectoryScanService
             
             var dirInfo = new DirectoryInfo(node.FullPath);
             
-            LoadSubdirectories(node, dirInfo, filter, children);
+            var includeHidden = scanOptions?.IncludeHidden ?? false;
+
+            LoadSubdirectories(node, dirInfo, filter, children, includeHidden);
             
-            LoadFiles(node, dirInfo, filter, children);
+            LoadFiles(node, dirInfo, filter, children, includeHidden);
             
             _logger.LogInformation("Loaded {ChildrenCount} children for node: {NodePath}", children.Count, node.FullPath);
         }
@@ -106,12 +108,13 @@ public sealed class DirectoryScanService
         return Task.FromResult(children);
     }
     
-    private void LoadSubdirectories(TreeNode parentNode, DirectoryInfo dirInfo, Func<FileSystemInfoWrapper, bool>? filter, List<TreeNode> children)
+    private void LoadSubdirectories(TreeNode parentNode, DirectoryInfo dirInfo, Func<FileSystemInfoWrapper, bool>? filter, List<TreeNode> children, bool includeHidden)
     {
         try
         {
             // Enumerate subdirectories once and cache the result
-            var subdirectories = dirInfo.GetDirectories("*", DirectoryEnumerationOptions);
+            var directoryOptions = DirectoryEnumerationOptionsFor(includeHidden);
+            var subdirectories = dirInfo.GetDirectories("*", directoryOptions);
             
             // getting subdirectories in the current root directory we are in
             foreach (var dir in subdirectories) 
@@ -137,7 +140,7 @@ public sealed class DirectoryScanService
                         LastAccessed = dir.LastAccessTime,
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
-                        HasChildren = HasAnyChildren(dir, DirectoryEnumerationOptions, filter), // check if the directory has any children to determine if it can be expanded
+                        HasChildren = HasAnyChildren(dir, directoryOptions, filter), // check if the directory has any children to determine if it can be expanded
                         IsCheckboxSelected = parentNode.IsCheckboxSelected, // inherit selection state from parent
                         IsCheckboxEnabled = !parentNode.IsCheckboxSelected // if parent is selected then disable the checkbox for the child since we dont want to allow unselecting a child when parent is selected, this simplifies the logic and avoids edge cases with selection state
                     };
@@ -158,11 +161,11 @@ public sealed class DirectoryScanService
         _logger.LogInformation("Loaded {ChildrenCount} subdirectories for node: {NodePath}", children.Count, parentNode.FullPath);
     }
     
-    private void LoadFiles(TreeNode parentNode, DirectoryInfo dirInfo, Func<FileSystemInfoWrapper, bool>? filter, List<TreeNode> children)
+    private void LoadFiles(TreeNode parentNode, DirectoryInfo dirInfo, Func<FileSystemInfoWrapper, bool>? filter, List<TreeNode> children, bool includeHidden)
     {
         try
         {
-            foreach (FileInfo file in dirInfo.GetFiles("*", FileEnumerationOptions))
+            foreach (FileInfo file in dirInfo.GetFiles("*", FileEnumerationOptionsFor(includeHidden)))
             {
                 try
                 {
@@ -203,12 +206,13 @@ public sealed class DirectoryScanService
     /// Parallelized approach for loading subdirectories from a single directory.
     /// Processes directory entries concurrently across CPU cores.
     /// </summary>
-    private void LoadSubdirectoriesParallel(TreeNode parentNode, DirectoryInfo dirInfo, Func<FileSystemInfoWrapper, bool>? filter, List<TreeNode> children)
+    private void LoadSubdirectoriesParallel(TreeNode parentNode, DirectoryInfo dirInfo, Func<FileSystemInfoWrapper, bool>? filter, List<TreeNode> children, bool includeHidden)
     {
         try
         {
             // Enumerate directories once before parallel processing
-            DirectoryInfo[] directories = dirInfo.GetDirectories("*", DirectoryEnumerationOptions);
+            var directoryOptions = DirectoryEnumerationOptionsFor(includeHidden);
+            DirectoryInfo[] directories = dirInfo.GetDirectories("*", directoryOptions);
             var childNodes = new ConcurrentBag<TreeNode>();
             
             Parallel.ForEach(directories, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, dir =>
@@ -233,7 +237,7 @@ public sealed class DirectoryScanService
                         LastAccessed = dir.LastAccessTime,
                         Depth = parentNode.Depth + 1,
                         Parent = parentNode,
-                        HasChildren = HasAnyChildren(dir, DirectoryEnumerationOptions, filter), // check if the directory has any children to determine if it can be expanded
+                        HasChildren = HasAnyChildren(dir, directoryOptions, filter), // check if the directory has any children to determine if it can be expanded
                         IsCheckboxSelected = parentNode.IsCheckboxSelected, // inherit selection state from parent
                         IsCheckboxEnabled = !parentNode.IsCheckboxSelected
                     };
@@ -271,6 +275,7 @@ public sealed class DirectoryScanService
         return await Task.Run(() =>
         {
             var filter = _scanFilterService.CreateFilter(scanOptions);
+            var includeHidden = scanOptions?.IncludeHidden ?? false;
             
             Parallel.ForEach(rootNodes, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, rootNode =>
             {
@@ -279,8 +284,8 @@ public sealed class DirectoryScanService
                     var dirInfo = new DirectoryInfo(rootNode.FullPath);
                     var children = new List<TreeNode>();
                     
-                    LoadSubdirectoriesParallel(rootNode, dirInfo, filter, children);
-                    LoadFiles(rootNode, dirInfo, filter, children);
+                    LoadSubdirectoriesParallel(rootNode, dirInfo, filter, children, includeHidden);
+                    LoadFiles(rootNode, dirInfo, filter, children, includeHidden);
                     
                     childrenByRoot.TryAdd(rootNode, children);
                 }

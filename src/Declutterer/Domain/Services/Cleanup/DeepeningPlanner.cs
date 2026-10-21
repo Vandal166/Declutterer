@@ -28,10 +28,24 @@ public static class DeepeningPlanner
         ReasonCode.UserSettingsOrSaves,
     };
 
+    // Folders that host regenerable output as direct children (node_modules, bin/obj, target ...) are the best places to
+    // look inside; they are opened before plain big folders so the per-round limit is not eaten by games, VMs and media.
+    private static bool HostsBuildOutput(JunkAssessment a) =>
+        a.Reasons.Any(r => r.Code is ReasonCode.ProjectRoot or ReasonCode.VersionControlRepo);
+
     public static IReadOnlyList<NodeSnapshot> SelectTargets(IEnumerable<NodeSnapshot> roots,
+        IReadOnlyDictionary<NodeSnapshot, JunkAssessment> assessments, SmartCleanupOptions options,
+        ISet<TreeNode>? attempted = null) =>
+        Candidates(roots, assessments, options)
+            .Where(node => attempted is null || node.Source is null || !attempted.Contains(node.Source))
+            .Take(Math.Max(0, options.DeepenMaxTargetsPerRound))
+            .ToList();
+
+    /// <summary>Every folder that qualifies for loading, best first (ignores the per-round limit).</summary>
+    public static IReadOnlyList<NodeSnapshot> Candidates(IEnumerable<NodeSnapshot> roots,
         IReadOnlyDictionary<NodeSnapshot, JunkAssessment> assessments, SmartCleanupOptions options)
     {
-        var result = new List<NodeSnapshot>();
+        var result = new List<(NodeSnapshot Node, bool Hosts)>();
 
         foreach (var node in roots.SelectMany(r => r.SelfAndDescendants()))
         {
@@ -46,12 +60,13 @@ public static class DeepeningPlanner
             if (a.Reasons.Any(r => r.HardKeep && NoDive.Contains(r.Code)))
                 continue;
 
-            result.Add(node);
+            result.Add((node, HostsBuildOutput(a)));
         }
 
         return result
-            .OrderByDescending(n => n.Size)
-            .Take(Math.Max(0, options.DeepenMaxTargetsPerRound))
+            .OrderByDescending(x => x.Hosts)
+            .ThenByDescending(x => x.Node.Size)
+            .Select(x => x.Node)
             .ToList();
     }
 }

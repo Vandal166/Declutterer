@@ -66,9 +66,25 @@ Two-stage cascade:
 
 * **Stage A** – metadata only, every loaded node, parallel. A strongly disposable folder covers its loaded descendants only after its full descendant safety walk succeeds. If that walk finds a blocker or is incomplete, its loaded children are assessed.
 * **Stage B** – bounded disk inspection (entry cap, depth cap, wall-clock budget, cancellation) for folders stage A could not rule out. Folders proven alive (activity in the last 14 days) may stop their detailed content walk early; a directory that could be selected whole still requires its separate complete safety walk. Completed results are memoised and shared between nested folders and between passes.
-* **Deepening** – junk usually hides one or two levels below what is loaded (`node_modules` inside a project). Big, non-junk, non-vetoed folders are loaded one more level (≤ 3 rounds, ≤ 6 levels, ≤ 150 folders per round) through the existing `ITreeNavigationService`.
+* **Deepening** – junk usually hides one or two levels below what is loaded (`node_modules` inside a project). Big, non-junk, non-vetoed folders are loaded one more level (≤ 6 rounds, ≤ 10 levels, ≤ 400 folders per round) through the existing `ITreeNavigationService`. Folders that look like projects / repositories are opened first (their build output is what we are after), then the rest by size - otherwise a few hundred big game or media folders use up the quota before any project is opened.
+* **Budgets** – `TimeBudget` (30 s) is granted *separately* to the disk inspection and to the descendant safety scans of one pass, so walking big folders of old personal data can no longer starve the safety scans of the junk folders. A scan that merely timed out is never remembered by the session (a later pass retries it), and a pass that hits its budget no longer ends the run; `TotalTimeBudget` (3 min) bounds the whole run.
+* **Lookups** – "is this path inside the install location of an installed program" is an ancestor lookup, not a scan over every uninstall entry. With ~300 entries (typical) the old scan made the safety walk ~10x slower and was the main reason large `node_modules` trees ran out of time.
 
 Measured on a synthetic profile with 167,800 files (this sandbox, 4 jobs): plain recursive size walk 415 ms; typical tree (133 nodes loaded) 207 ms; **fully expanded tree, 168k nodes loaded** 1.0 s (2.5×). Before top-down pruning the same case took 5.7 s.
+
+## Why Smart Select may find little
+
+The summary line under the selection explains what limited the result, so "found little" can be told apart from "could not look":
+
+| Message | Meaning / what to do |
+|---|---|
+| *Hidden folders (AppData, ProgramData, .git, .vs) were not scanned* | The scan skipped everything with the Hidden attribute. Caches, temp files and leftovers of removed apps live there. Enable **Include hidden folders and files** in Scan Settings (off by default: it also exposes those folders to *Select All*). |
+| *N large folders were not opened (depth / round limit)* | More folders could have been looked into than the limits allow. Run Smart Select again (opened folders stay loaded) or scan a narrower root. |
+| *N folders were not inspected / Time budget reached* | The disk inspection ran out of time for these folders; they cannot reach Safe. |
+| *N folders could not be fully safety-checked* | Too many entries, depth limit, unreadable entries or time. They are never auto-selected; you can still tick them by hand. |
+| *Stopped at the overall time limit* | `TotalTimeBudget` was reached. Run again to continue deeper. |
+
+Age on its own is deliberately never enough for a "junk" verdict (see above), so very old folders of unrecognised personal files stay *Keep* in every mode.
 
 ## Tuning
 
@@ -81,6 +97,8 @@ Before describing Smart Select scores as calibrated probabilities or changing we
 ## Known limits / roadmap
 
 * Windows first. Linux/macOS use `DefaultSystemSnapshotProvider` (no installed-program inventory → no orphan detection).
+* Hidden entries are only scanned when *Include hidden* is enabled; without it the AppData based rules (caches, temp, orphaned app data, crash dumps) cannot fire on a whole-drive scan.
+* Duplicate detection only covers `name (1).ext` / `Copy of` siblings that are byte-identical; there is no cross-folder content hashing yet.
 * Scheduled tasks, Prefetch and jump lists are not consulted yet.
 * App-data name matching is fuzzy; that is why orphans top out at *Likely* (*Review* for Roaming) unless the content itself is disposable.
 * Deletion speed (Recycle Bin of huge folders) is unchanged.

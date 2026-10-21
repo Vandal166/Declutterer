@@ -43,6 +43,12 @@ public sealed class CleanupScenario : IDisposable
 
     public Func<string, string?>? SafetyGate { get; set; }
 
+    /// <summary>Shared between several <see cref="Run"/> calls to simulate consecutive passes of one Smart Select run.</summary>
+    public AnalysisSession? Session { get; set; }
+
+    /// <summary>Replaces the default rule set (e.g. to add a rule that makes a stage slow).</summary>
+    public IReadOnlyList<IAssessmentRule>? Rules { get; set; }
+
     public string Abs(string rel) => System.IO.Path.Combine(Root, rel.Replace('/', System.IO.Path.DirectorySeparatorChar));
 
     public string File(string rel, int ageDays, long size = 2048)
@@ -78,11 +84,12 @@ public sealed class CleanupScenario : IDisposable
         var rootSnap = Build(Root, null, true, new Dictionary<string, NodeSnapshot>(StringComparer.OrdinalIgnoreCase), out var byRel);
 
         var machine = new SystemSnapshot(Machine);
-        var engine = SafetyGate is null
+        var engine = SafetyGate is null && Rules is null
             ? new JunkAssessmentEngine()
-            : new JunkAssessmentEngine(JunkAssessmentEngine.DefaultRules(), new DirectoryFactsCollector(), SafetyGate);
+            : new JunkAssessmentEngine(Rules ?? JunkAssessmentEngine.DefaultRules(), new DirectoryFactsCollector(),
+                SafetyGate ?? JunkAssessmentEngine.DefaultSafetyGate);
 
-        var analysis = engine.Analyze(new[] { rootSnap }, machine, Options);
+        var analysis = engine.Analyze(new[] { rootSnap }, machine, Options, session: Session);
         return new ScenarioResult(this, rootSnap, byRel, analysis);
     }
 

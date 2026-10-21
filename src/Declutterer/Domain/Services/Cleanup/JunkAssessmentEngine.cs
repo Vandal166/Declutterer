@@ -28,8 +28,14 @@ public sealed class AnalysisSession
     public bool TryGetSafety(string path, out DirectorySafetyScanResult result) =>
         _safety.TryGetValue(PathKey.Normalize(path), out result!);
 
+    /// <summary>
+    /// Remembers a safety scan for later passes. A scan that merely ran out of time says nothing about the folder, so it
+    /// is NOT remembered: otherwise one slow pass would mark the folder "incomplete" for the rest of the session.
+    /// </summary>
     public void PublishSafety(string path, DirectorySafetyScanResult result)
     {
+        if (result.BudgetExceeded)
+            return;
         _safety[PathKey.Normalize(path)] = result;
     }
 }
@@ -41,6 +47,12 @@ public sealed class AnalysisResult
     public int DirectoriesInspected { get; init; }
     public int DirectoriesTruncated { get; init; }
     public bool BudgetExceeded { get; init; }
+
+    /// <summary>Directories that were due for a disk inspection but the time budget ran out before it started.</summary>
+    public int DirectoriesNotInspected { get; init; }
+
+    /// <summary>Directories whose descendant safety scan could not finish (time, entry or depth limit, unreadable entries).</summary>
+    public int IncompleteSafetyScans { get; init; }
     public TimeSpan Elapsed { get; init; }
 }
 
@@ -109,8 +121,16 @@ public sealed class JunkAssessmentEngine
         IProgress<AnalysisProgress>? progress = null, CancellationToken cancellationToken = default, AnalysisSession? session = null)
     {
         var started = DateTime.UtcNow;
-        var deadline = started + options.TimeBudget;
+        var deadline = started + options.TimeBudget; // disk inspection (stage B)
         session ??= new AnalysisSession();
+
+        // Descendant safety scans get their own allotment of TimeBudget. They used to share the clock with the disk
+        // inspection, so walking big folders of old personal data used up the time and every junk folder that came
+        // afterwards was reported as "incomplete", which can never be selected.
+        var safetySpent = TimeSpan.Zero;
+        DateTime SafetyDeadline() => DateTime.UtcNow + (options.TimeBudget - safetySpent);
+        var passSafety = new ConcurrentDictionary<string, DirectorySafetyScanResult>(StringComparer.OrdinalIgnoreCase);
+        int incompleteSafety = 0, notInspected = 0;
         var po = new ParallelOptions
         {
             CancellationToken = cancellationToken,
@@ -144,18 +164,21 @@ public sealed class JunkAssessmentEngine
             });
 
             var stageASafety = new DirectorySafetyScanResult?[batch.Length];
+            var levelSafetyDeadline = SafetyDeadline();
+            var levelClock = System.Diagnostics.Stopwatch.StartNew();
             Parallel.For(0, batch.Length, po, i =>
             {
                 if (!batch[i].IsDirectory || results[i].Assessment.HasHardKeep ||
                     !SignalSink.IsDisposableRegion(results[i].Signals))
                     return;
 
-                var scan = GetSafetyScan(batch[i], machine, options, session, deadline, cancellationToken);
+                var scan = GetSafetyScan(batch[i], machine, options, session, passSafety, levelSafetyDeadline, cancellationToken);
                 stageASafety[i] = scan;
                 results[i].Assessment = ApplySafetyResult(results[i].Assessment, scan);
                 if (scan.BudgetExceeded)
                     Interlocked.Exchange(ref safetyBudgetExceeded, 1);
             });
+            safetySpent += levelClock.Elapsed;
 
             var next = new List<NodeSnapshot>();
             for (int i = 0; i < batch.Length; i++)
@@ -186,7 +209,11 @@ public sealed class JunkAssessmentEngine
             var targets = Enumerable.Range(0, count)
                 .Where(i => nodes[i].IsDirectory && !assessments[i].HasHardKeep && assessments[i].Tier != CleanupTier.Protected &&
                             assessments[i].JunkScore >= options.DeepInspectMinJunk)
-                .OrderByDescending(i => nodes[i].Depth) // deepest first -> parents reuse the children's results
+                // Promising folders first (stage A already sees junk-like evidence), so the budget is spent on candidates
+                // and not on big folders of old personal data that can only end up as "keep". Inside each group deepest
+                // first, so parents reuse the children's results.
+                .OrderByDescending(i => assessments[i].JunkScore >= 0.50)
+                .ThenByDescending(i => nodes[i].Depth)
                 .ToArray();
 
             progress?.Report(new AnalysisProgress("Inspecting folders", 0, targets.Length));
@@ -206,6 +233,7 @@ public sealed class JunkAssessmentEngine
                 if (DateTime.UtcNow > deadline)
                 {
                     Interlocked.Exchange(ref budgetExceeded, 1);
+                    Interlocked.Increment(ref notInspected);
                     return;
                 }
 
@@ -244,7 +272,7 @@ public sealed class JunkAssessmentEngine
                 var (ctx, sig, a) = Evaluate(nodes[i], facts[i], machine, options, markers, accessReliable, combiner);
                 contexts[i] = ctx;
                 signals[i] = sig;
-                assessments[i] = session.TryGetSafety(nodes[i].Path, out var safety)
+                assessments[i] = TryGetKnownSafety(nodes[i].Path, session, passSafety, out var safety)
                     ? ApplySafetyResult(a, safety)
                     : a;
             });
@@ -252,14 +280,17 @@ public sealed class JunkAssessmentEngine
 
         // ── Safety gate: directory candidates need complete descendant coverage; files need a current path check. ──
         progress?.Report(new AnalysisProgress("Validating", 0, count));
-        Parallel.For(0, count, po, i =>
+        var gateSafetyDeadline = SafetyDeadline();
+
+        // Big candidates first: if the allotment ever runs out, the folders that would free the most space were scanned.
+        Parallel.ForEach(Enumerable.Range(0, count).OrderByDescending(i => nodes[i].Size), po, i =>
         {
             if (assessments[i].Tier < CleanupTier.Review && assessments[i].SelectionBlockReason is null)
                 return;
 
             if (nodes[i].IsDirectory && !assessments[i].HasHardKeep)
             {
-                var scan = GetSafetyScan(nodes[i], machine, options, session, deadline, cancellationToken);
+                var scan = GetSafetyScan(nodes[i], machine, options, session, passSafety, gateSafetyDeadline, cancellationToken);
                 assessments[i] = ApplySafetyResult(assessments[i], scan);
                 if (scan.BudgetExceeded)
                     Interlocked.Exchange(ref budgetExceeded, 1);
@@ -284,6 +315,12 @@ public sealed class JunkAssessmentEngine
             assessments[i] = WithSelectionSafety(combiner.Combine(contexts[i], withVeto), complete: false, blockReason: blocked);
         });
 
+        foreach (var scan in passSafety.Values)
+        {
+            if (scan.Status == DirectorySafetyStatus.Incomplete)
+                incompleteSafety++;
+        }
+
         var map = new Dictionary<NodeSnapshot, JunkAssessment>(count);
         for (int i = 0; i < count; i++)
             map[nodes[i]] = assessments[i];
@@ -295,18 +332,37 @@ public sealed class JunkAssessmentEngine
             DirectoriesInspected = inspected,
             DirectoriesTruncated = truncated,
             BudgetExceeded = budgetExceeded != 0,
+            DirectoriesNotInspected = notInspected,
+            IncompleteSafetyScans = incompleteSafety,
             Elapsed = DateTime.UtcNow - started,
         };
     }
 
-    private DirectorySafetyScanResult GetSafetyScan(NodeSnapshot node, ISystemSnapshot machine, SmartCleanupOptions options,
-        AnalysisSession session, DateTime deadline, CancellationToken cancellationToken)
+    private static bool TryGetKnownSafety(string path, AnalysisSession session,
+        ConcurrentDictionary<string, DirectorySafetyScanResult> pass, out DirectorySafetyScanResult result)
     {
-        if (session.TryGetSafety(node.Path, out var cached))
+        var key = PathKey.Normalize(path);
+        if (pass.TryGetValue(key, out result!))
+            return true;
+
+        if (!session.TryGetSafety(path, out result!))
+            return false;
+
+        // Include reused deterministic results in this pass's summary as well as newly run scans.
+        pass.TryAdd(key, result);
+        return true;
+    }
+
+    private DirectorySafetyScanResult GetSafetyScan(NodeSnapshot node, ISystemSnapshot machine, SmartCleanupOptions options,
+        AnalysisSession session, ConcurrentDictionary<string, DirectorySafetyScanResult> pass, DateTime deadline,
+        CancellationToken cancellationToken)
+    {
+        if (TryGetKnownSafety(node.Path, session, pass, out var cached))
             return cached;
 
         var result = _safetyScanner.Scan(node.Path, machine, options, deadline, _safetyGate, cancellationToken);
-        session.PublishSafety(node.Path, result);
+        session.PublishSafety(node.Path, result); // time-outs are not remembered across passes ...
+        pass[PathKey.Normalize(node.Path)] = result; // ... but are within this pass, so nothing is scanned twice
         return result;
     }
 

@@ -139,6 +139,106 @@ public class SmartCleanupServiceTests : IDisposable
         Assert.All(balanced, n => Assert.Equal("node_modules", n.Name));
     }
 
+    private SmartCleanupService ServiceWith(SmartCleanupOptions options) =>
+        new(new JunkAssessmentEngine(), new SmartCleanupSelector(), new FakeSnapshotProvider(), _navigation, new FakeCommandService(),
+            new TestDispatcher(), options);
+
+    [Fact]
+    public async Task KeepsLookingInsideFolders_EvenWhenAPassRanOutOfTime()
+    {
+        const long mb = 1024 * 1024;
+        Old("Projects/old-app/package.json", 300);
+        Old("Projects/old-app/node_modules/m/index.js", 6 * mb);
+        SettleDirectoryAges();
+        var root = LoadedRoot();
+        // a zero budget makes every pass report "time budget reached"; that used to end the run before a single folder was opened
+        var service = ServiceWith(new SmartCleanupOptions { UseCreationTime = false, MaxDegreeOfParallelism = 2, TimeBudget = TimeSpan.Zero });
+
+        var result = await service.SelectAsync(new[] { root }, SmartSelectMode.Aggressive, null, new ObservableHashSet<TreeNode>());
+
+        Assert.True(result.BudgetExceeded);
+        Assert.True(_navigation.LoadCalls > 0, "folders should still be loaded after a pass that ran out of time");
+        Assert.True(result.FoldersLoaded > 0);
+    }
+
+    [Fact]
+    public async Task ReportsWhatItCouldNotLookInto_WhenTheRoundLimitStopsIt()
+    {
+        const long mb = 1024 * 1024;
+        Old("Projects/old-app/package.json", 300);
+        Old("Projects/old-app/src/index.js", 5 * mb);
+        Old("Projects/old-app/node_modules/m/index.js", 6 * mb);
+        SettleDirectoryAges();
+        var root = LoadedRoot();
+        var service = ServiceWith(new SmartCleanupOptions { UseCreationTime = false, MaxDegreeOfParallelism = 2, DeepenMaxRounds = 1 });
+
+        var result = await service.SelectAsync(new[] { root }, SmartSelectMode.Conservative, null, new ObservableHashSet<TreeNode>());
+
+        Assert.Equal(1, result.FoldersLoaded);
+        Assert.True(result.UnexploredFolders > 0, "src was never opened because the round limit was reached");
+        Assert.False(result.StoppedByTimeLimit);
+    }
+
+    [Fact]
+    public async Task StopsStartingNewRounds_AfterTheTotalTimeBudget()
+    {
+        const long mb = 1024 * 1024;
+        Old("Projects/old-app/package.json", 300);
+        Old("Projects/old-app/node_modules/m/index.js", 6 * mb);
+        SettleDirectoryAges();
+        var root = LoadedRoot();
+        var service = ServiceWith(new SmartCleanupOptions { UseCreationTime = false, MaxDegreeOfParallelism = 2, TotalTimeBudget = TimeSpan.Zero });
+
+        var result = await service.SelectAsync(new[] { root }, SmartSelectMode.Conservative, null, new ObservableHashSet<TreeNode>());
+
+        Assert.True(result.StoppedByTimeLimit);
+        Assert.Equal(0, result.FoldersLoaded);
+    }
+
+    [Fact]
+    public async Task FailedFolderLoad_DoesNotConsumeTheTargetLimitForOtherFolders()
+    {
+        const long mb = 1024 * 1024;
+        Old("A/old.bin", 12 * mb);
+        Old("B/old.bin", 6 * mb);
+        SettleDirectoryAges();
+        _navigation.FailPath = Path.Combine(_dir.Path, "A");
+        var root = LoadedRoot();
+        var service = ServiceWith(new SmartCleanupOptions
+        {
+            UseCreationTime = false,
+            MaxDegreeOfParallelism = 2,
+            DeepenMaxRounds = 2,
+            DeepenMaxTargetsPerRound = 1,
+        });
+
+        await service.SelectAsync(new[] { root }, SmartSelectMode.Conservative, null, new ObservableHashSet<TreeNode>());
+
+        Assert.True(_navigation.LoadCalls >= 2, "the next candidate should be attempted after the first folder fails to load");
+        Assert.Contains(root.Children.Single(node => node.Name == "B").Children, node => node.Name == "old.bin");
+    }
+
+    [Fact]
+    public async Task DoesNotStartAnotherAnalysis_AfterTheTotalBudgetExpiresDuringLoading()
+    {
+        const long mb = 1024 * 1024;
+        Old("A/B/C/old.bin", 6 * mb);
+        SettleDirectoryAges();
+        _navigation.LoadDelay = TimeSpan.FromSeconds(2.1);
+        var root = LoadedRoot();
+        var service = ServiceWith(new SmartCleanupOptions
+        {
+            UseCreationTime = false,
+            MaxDegreeOfParallelism = 2,
+            TotalTimeBudget = TimeSpan.FromSeconds(2),
+        });
+
+        var result = await service.SelectAsync(new[] { root }, SmartSelectMode.Conservative, null, new ObservableHashSet<TreeNode>());
+
+        Assert.True(result.StoppedByTimeLimit);
+        Assert.Equal(1, _navigation.LoadCalls);
+    }
+
     // ── fakes ──────────────────────────────────────────────────────────────
 
     private sealed class FakeSnapshotProvider : ISystemSnapshotProvider
@@ -165,10 +265,16 @@ public class SmartCleanupServiceTests : IDisposable
     private sealed class DiskTreeNavigation : ITreeNavigationService
     {
         public int LoadCalls;
+        public string? FailPath { get; set; }
+        public TimeSpan LoadDelay { get; set; }
 
         public Task LoadChildrenForNodeAsync(TreeNode node, ScanOptions? currentScanOptions)
         {
             Interlocked.Increment(ref LoadCalls);
+            if (LoadDelay > TimeSpan.Zero)
+                System.Threading.Thread.Sleep(LoadDelay);
+            if (string.Equals(node.FullPath, FailPath, StringComparison.OrdinalIgnoreCase))
+                return Task.CompletedTask;
             if (node.Children.Count > 0)
                 return Task.CompletedTask;
 

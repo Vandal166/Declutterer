@@ -79,6 +79,20 @@ public sealed class DirectorySafetyScannerTests : IDisposable
         Assert.True(result.BudgetExceeded);
     }
 
+    [Fact]
+    public void EntryLimitMakesSafetyScanIncompleteWithoutReportingATimeout()
+    {
+        var root = Path.Combine(_temp.Path, "candidate");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "item.tmp"), "data");
+
+        var result = Scan(root, new SmartCleanupOptions { MaxEntriesPerDirectory = 0 });
+
+        Assert.Equal(DirectorySafetyStatus.Incomplete, result.Status);
+        Assert.Contains("entry limit", result.BlockReason);
+        Assert.False(result.BudgetExceeded);
+    }
+
     private DirectorySafetyScanResult Scan(string root, SmartCleanupOptions? options = null) =>
         _scanner.Scan(root, _machine, options ?? new SmartCleanupOptions(), DateTime.UtcNow.AddMinutes(1),
             JunkAssessmentEngine.DefaultSafetyGate);

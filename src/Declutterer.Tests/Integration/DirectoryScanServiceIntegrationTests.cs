@@ -232,6 +232,88 @@ public class DirectoryScanServiceIntegrationTests : IDisposable
         Assert.Equal("file2.txt", childrenByRoot[root2][0].Name);
     }
 
+    // ── hidden entries (AppData, ProgramData, .git, .vs ... on Windows; dot-files on Unix) ─────────────
+
+    private string CreateHidden(string relativePath, bool asDirectory)
+    {
+        // dot-prefixed names are hidden on Unix; Windows needs the attribute (ignored by Unix where it is not supported)
+        var path = asDirectory
+            ? _tempDir.CreateSubDirectory(relativePath)
+            : _tempDir.CreateFile(relativePath, 512);
+        try
+        {
+            File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.Hidden);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException or ArgumentException)
+        {
+            // the name alone marks it hidden on this platform
+        }
+        return path;
+    }
+
+    [Fact]
+    public async Task LoadChildrenAsync_SkipsHiddenEntriesByDefault()
+    {
+        _tempDir.CreateFile("visible.txt", 1024);
+        CreateHidden(".hidden-dir", asDirectory: true);
+        CreateHidden(".hidden-file.dat", asDirectory: false);
+        var rootNode = DirectoryScanService.CreateRootNode(_tempDir.Path);
+
+        var children = await _scanService.LoadChildrenAsync(rootNode, null);
+
+        Assert.Single(children);
+        Assert.Equal("visible.txt", children[0].Name);
+    }
+
+    [Fact]
+    public async Task LoadChildrenAsync_WithIncludeHidden_LoadsHiddenFoldersAndFiles()
+    {
+        _tempDir.CreateFile("visible.txt", 1024);
+        var hiddenDir = CreateHidden(".hidden-dir", asDirectory: true);
+        File.WriteAllText(Path.Combine(hiddenDir, "inside.txt"), "x");
+        CreateHidden(".hidden-file.dat", asDirectory: false);
+        var rootNode = DirectoryScanService.CreateRootNode(_tempDir.Path);
+
+        var children = await _scanService.LoadChildrenAsync(rootNode, new ScanOptions { IncludeHidden = true });
+
+        Assert.Equal(3, children.Count);
+        var dir = Assert.Single(children, c => c.Name == ".hidden-dir");
+        Assert.True(dir.IsDirectory);
+        Assert.True(dir.HasChildren);
+        Assert.Contains(children, c => c.Name == ".hidden-file.dat" && !c.IsDirectory);
+    }
+
+    [Fact]
+    public async Task LoadChildrenAsync_IncludeHidden_HasChildrenSeesHiddenOnlyContent()
+    {
+        var folder = _tempDir.CreateSubDirectory("folder");
+        File.WriteAllText(Path.Combine(folder, ".only-hidden"), "x");
+        File.SetAttributes(Path.Combine(folder, ".only-hidden"), File.GetAttributes(Path.Combine(folder, ".only-hidden")));
+        var rootNode = DirectoryScanService.CreateRootNode(_tempDir.Path);
+
+        var hiddenIncluded = await _scanService.LoadChildrenAsync(rootNode, new ScanOptions { IncludeHidden = true });
+
+        Assert.True(Assert.Single(hiddenIncluded).HasChildren);
+    }
+
+    [Fact]
+    public async Task LoadChildrenForMultipleRootsAsync_WithIncludeHidden_LoadsHiddenEntries()
+    {
+        var dir = _tempDir.CreateSubDirectory("root1");
+        File.WriteAllText(Path.Combine(dir, "visible.txt"), "x");
+        var hidden = Path.Combine(dir, ".hidden-dir");
+        Directory.CreateDirectory(hidden);
+        try { File.SetAttributes(hidden, File.GetAttributes(hidden) | FileAttributes.Hidden); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException) { }
+        var root = DirectoryScanService.CreateRootNode(dir);
+
+        var without = await _scanService.LoadChildrenForMultipleRootsAsync(new[] { root }, new ScanOptions());
+        var with = await _scanService.LoadChildrenForMultipleRootsAsync(new[] { root }, new ScanOptions { IncludeHidden = true });
+
+        Assert.Single(without[root]);
+        Assert.Equal(2, with[root].Count);
+        Assert.Contains(with[root], c => c.Name == ".hidden-dir" && c.IsDirectory);
+    }
+
     public void Dispose()
     {
         _tempDir.Dispose();

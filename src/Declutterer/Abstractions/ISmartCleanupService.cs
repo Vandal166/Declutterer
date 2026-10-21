@@ -17,7 +17,12 @@ public sealed record SmartCleanupResult(
     int LikelyCount,
     int ReviewCount,
     bool BudgetExceeded,
-    TimeSpan Elapsed)
+    TimeSpan Elapsed,
+    int FoldersLoaded = 0,
+    int UnexploredFolders = 0,
+    int IncompleteSafetyScans = 0,
+    int UninspectedFolders = 0,
+    bool StoppedByTimeLimit = false)
 {
     public static readonly SmartCleanupResult Empty = new(0, 0, 0, 0, 0, 0, false, TimeSpan.Zero);
 }

@@ -43,8 +43,15 @@ public sealed class SmartCleanupOptions
     /// <summary>When false only metadata that is already loaded in the tree is used (fastest, least accurate).</summary>
     public bool EnableDeepInspection { get; set; } = true;
 
-    /// <summary>Wall-clock budget for the disk inspection stage. Items not inspected in time can never reach Safe.</summary>
-    public TimeSpan TimeBudget { get; set; } = TimeSpan.FromSeconds(12);
+    /// <summary>
+    /// Wall-clock budget of ONE analysis pass for each of its two expensive stages: the disk inspection and the descendant
+    /// safety scans (each gets this much, they do not share it). Items not inspected / scanned in time can never reach Safe
+    /// and a directory whose safety scan timed out is never auto-selected.
+    /// </summary>
+    public TimeSpan TimeBudget { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Upper bound for a whole Smart Select run (all deepening rounds together). No further round starts after it.</summary>
+    public TimeSpan TotalTimeBudget { get; set; } = TimeSpan.FromMinutes(3);
 
     /// <summary>Upper bound of file system entries enumerated while inspecting one directory subtree.</summary>
     public int MaxEntriesPerDirectory { get; set; } = 300_000;
@@ -55,10 +62,14 @@ public sealed class SmartCleanupOptions
     public long DeepenMinBytes { get; set; } = 4L * 1024 * 1024;
 
     /// <summary>How many levels below a scan root Smart Select may load on its own to find junk.</summary>
-    public int DeepenMaxDepth { get; set; } = 6;
+    public int DeepenMaxDepth { get; set; } = 10;
 
-    public int DeepenMaxTargetsPerRound { get; set; } = 150;
-    public int DeepenMaxRounds { get; set; } = 3;
+    /// <summary>
+    /// Folders loaded per deepening round. A round looks two levels deep (the loaded folder and the one-level preload),
+    /// so on a whole-drive scan the old limit of 150 meant most project folders were never opened.
+    /// </summary>
+    public int DeepenMaxTargetsPerRound { get; set; } = 400;
+    public int DeepenMaxRounds { get; set; } = 6;
 
     /// <summary>
     /// Treat the creation time as activity. A copied / extracted file keeps its old write time but gets a new creation

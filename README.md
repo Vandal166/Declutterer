@@ -21,7 +21,7 @@ Declutterer is a cross-platform desktop application for scanning, analysing, and
 
 ## Functionalities
 
-- **Directory scanning** – scan one or more root directories with configurable filters (minimum file/directory size, modified-before date, accessed-before date, include/exclude files).
+- **Directory scanning** – scan one or more root directories with configurable filters (minimum file/directory size, modified-before date, accessed-before date, include/exclude files), optionally including hidden folders such as AppData).
 - **Smart selection** – evidence based: scores every item for *junk likelihood*, *deletion risk* and *confidence* with explainable reason codes (caches, temp, regenerable build output, leftovers of removed applications, duplicate/extracted/installer files …) and only ticks what qualifies for the chosen mode (Conservative / Balanced / Aggressive). Old is not treated as useless: running programs, installed apps, recent files, git repos, credentials and cloud-synced folders veto selection. See [docs/SmartSelect.md](docs/SmartSelect.md).
 - **Manual selection** – toggle individual nodes or select/deselect all via the tree grid's checkboxes.
 - **Delete to Recycle Bin** – safely moves selected items to the platform Recycle Bin / Trash with progress tracking and cancellation support.

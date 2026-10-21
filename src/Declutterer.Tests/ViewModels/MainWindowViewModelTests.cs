@@ -268,6 +268,35 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public void DescribeSmartSelect_SaysWhatLimitedTheResult()
+    {
+        var result = new SmartCleanupResult(0, 0, 500, 0, 0, 0, true, TimeSpan.FromSeconds(30),
+            FoldersLoaded: 10, UnexploredFolders: 7, IncompleteSafetyScans: 3, UninspectedFolders: 12, StoppedByTimeLimit: true);
+
+        var text = MainWindowViewModel.DescribeSmartSelect(result, hiddenSkipped: true);
+
+        Assert.Contains("Nothing qualified", text);
+        Assert.Contains("12 folders were not inspected", text);
+        Assert.Contains("overall time limit", text);
+        Assert.Contains("7 large folders were not opened", text);
+        Assert.Contains("3 folders could not be fully safety-checked", text);
+        Assert.Contains("Include hidden", text);
+    }
+
+    [Fact]
+    public void DescribeSmartSelect_StaysQuiet_WhenNothingLimitedTheResult()
+    {
+        var result = new SmartCleanupResult(3, 3L * 1024 * 1024, 120, 2, 1, 0, false, TimeSpan.FromSeconds(1));
+
+        var text = MainWindowViewModel.DescribeSmartSelect(result, hiddenSkipped: false);
+
+        Assert.Contains("Selected 3 items", text);
+        Assert.DoesNotContain("not inspected", text);
+        Assert.DoesNotContain("not opened", text);
+        Assert.DoesNotContain("Include hidden", text);
+    }
+
+    [Fact]
     public void Dispose_CanBeCalledSafely()
     {
         var viewModel = CreateViewModel();

@@ -45,6 +45,10 @@ public sealed class DirectorySafetyScanner
     private static readonly OwnershipRule Ownership = new();
     private static readonly ContentRule Content = new();
 
+    // None of the rules run here consult the marker cache, so one shared (empty) instance is enough. Creating a
+    // MarkerCache per visited entry allocated a ConcurrentDictionary for every file of every scanned subtree.
+    private static readonly MarkerCache NoMarkers = new();
+
     public DirectorySafetyScanResult Scan(string path, ISystemSnapshot machine, SmartCleanupOptions options,
         DateTime deadlineUtc, Func<string, string?> safetyGate, CancellationToken cancellationToken = default)
     {
@@ -94,7 +98,7 @@ public sealed class DirectorySafetyScanner
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     if (++visited > options.MaxEntriesPerDirectory)
-                        return Incomplete("entry limit reached before the descendant safety scan completed", visited, budgetExceeded: true);
+                        return Incomplete("entry limit reached before the descendant safety scan completed", visited);
                     if ((visited & 0xFF) == 0 && DateTime.UtcNow >= deadlineUtc)
                         return Incomplete("time budget reached before the descendant safety scan completed", visited, budgetExceeded: true);
 
@@ -170,7 +174,7 @@ public sealed class DirectorySafetyScanner
             IsDirectory = isDirectory,
             Depth = 0,
         };
-        var context = new AssessmentContext(node, machine, options, new MarkerCache(), null, accessTimeReliable: false);
+        var context = new AssessmentContext(node, machine, options, NoMarkers, null, accessTimeReliable: false);
         var signals = new SignalSink();
         SensitiveLocations.Evaluate(context, signals);
         Ownership.Evaluate(context, signals);

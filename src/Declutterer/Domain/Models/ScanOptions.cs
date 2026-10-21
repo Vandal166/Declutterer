@@ -19,4 +19,12 @@ public partial class ScanOptions : ObservableObject
     
     [ObservableProperty]
     private bool _includeFiles = true;
+
+    /// <summary>
+    /// Also load entries carrying the Hidden attribute. On Windows that is AppData, ProgramData, .vs and .git - exactly the
+    /// places where caches, temp files and leftovers of removed applications live, so Smart Select cannot see them without it.
+    /// Off by default: it also puts those folders into "Select All" and into the manual selection.
+    /// </summary>
+    [ObservableProperty]
+    private bool _includeHidden;
 }
