@@ -44,11 +44,16 @@ public partial class App : Avalonia.Application
             // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             DisableAvaloniaDataAnnotationValidation();
             var mainWindow = new MainWindow(serviceProvider.GetRequiredService<TreeGridInteractionService>(), serviceProvider.GetRequiredService<INavigationService>(), 
-                serviceProvider.GetRequiredService<IClipboardService>(), serviceProvider.GetRequiredService<IErrorDialogService>())
+                serviceProvider.GetRequiredService<IClipboardService>(), serviceProvider.GetRequiredService<IErrorDialogService>(),
+                serviceProvider.GetRequiredService<IConfirmationDialogService>())
             {
                 DataContext = serviceProvider.GetRequiredService<MainWindowViewModel>()
             };
             desktop.MainWindow = mainWindow;
+
+            // Observation: read the persisted on/off setting and, if it is on, run the check-in the machine missed while the program was
+            // closed. Fire and forget: it logs its own failures and never blocks or breaks the start.
+            _ = serviceProvider.GetRequiredService<IObservationCoordinator>().StartupCatchUpAsync();
         }
 
         base.OnFrameworkInitializationCompleted();

@@ -22,4 +22,11 @@ public interface IConfirmationDialogService
     /// </summary>
     /// <returns>True if user clicked OK/Yes, false if user clicked Cancel/No</returns>
     Task<bool> ShowConfirmationAsync(string title, string message);
+
+    /// <summary>
+    /// Shows a confirmation dialog whose confirming button carries <paramref name="confirmText"/>. Unlike the overload above (which is
+    /// the red "Delete" confirmation) this one has a neutral style, for decisions that do not delete anything.
+    /// </summary>
+    /// <returns>True if the user confirmed, false if they cancelled or closed the dialog</returns>
+    Task<bool> ShowConfirmationAsync(string title, string message, string confirmText);
 }

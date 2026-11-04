@@ -14,7 +14,9 @@ public partial class MainWindow : Window
     private readonly TreeGridInteractionService _interactionService;
     private readonly INavigationService _navigationService;
     private readonly IErrorDialogService _errorDialogService;
-    public MainWindow(TreeGridInteractionService interactionService, INavigationService navigationService, IClipboardService clipboardService, IErrorDialogService errorDialogService)
+    private readonly IConfirmationDialogService? _confirmationDialogService;
+    public MainWindow(TreeGridInteractionService interactionService, INavigationService navigationService, IClipboardService clipboardService, IErrorDialogService errorDialogService,
+        IConfirmationDialogService? confirmationDialogService = null)
     {
         InitializeComponent();
         
@@ -22,9 +24,11 @@ public partial class MainWindow : Window
 
         _navigationService = navigationService;
         _errorDialogService = errorDialogService;
+        _confirmationDialogService = confirmationDialogService;
         
         _navigationService.SetOwnerWindow(this);
         _errorDialogService.SetOwnerWindow(this);
+        _confirmationDialogService?.SetOwnerWindow(this); // the "watch these folders?" and watchlist questions are asked from the main window
         
         // Initialize the clipboard service with the window's clipboard
         if (clipboardService is AvaloniaClipboardService avaloniaClipboardService)
@@ -65,6 +69,7 @@ public partial class MainWindow : Window
             {
                 _errorDialogService.SetOwnerWindow(this);
                 _navigationService.SetOwnerWindow(this);
+                _confirmationDialogService?.SetOwnerWindow(this);
 
                 if (result is not null) // if the cleanup window was closed with a result (i.e., not cancelled), we trigger a re-scan to refresh the state
                 {

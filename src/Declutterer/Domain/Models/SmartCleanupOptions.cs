@@ -43,6 +43,9 @@ public sealed class SmartCleanupOptions
     /// <summary>When false only metadata that is already loaded in the tree is used (fastest, least accurate).</summary>
     public bool EnableDeepInspection { get; set; } = true;
 
+    /// <summary>Observation discovery needs assessments for nested paths even beneath a disposable parent.</summary>
+    public bool PreserveAllDescendants { get; set; }
+
     /// <summary>
     /// Wall-clock budget of ONE analysis pass for each of its two expensive stages: the disk inspection and the descendant
     /// safety scans (each gets this much, they do not share it). Items not inspected / scanned in time can never reach Safe

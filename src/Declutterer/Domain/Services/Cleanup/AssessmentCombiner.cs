@@ -13,20 +13,102 @@ namespace Declutterer.Domain.Services.Cleanup;
 ///  • Deletion risk estimate = noisy-OR over the per-group maximum risk, floored at 0.95 by any hard veto.
 ///  • Evidence strength = evidence strength × agreement × diversity × coverage. Safe also requires positive
 ///    support from at least two configured evidence families.
+///
+/// Completed quiet observation (<see cref="ReasonCode.ObservedInactive"/>) is applied last and only where it is allowed to matter:
+/// the item has to be Review or Likely WITHOUT it, or Keep with independent LongUntouched / OrphanedAppData evidence. Nothing may
+/// veto it (hard keep, credentials, user documents), it may lift the tier by one step at most, and it may only relieve the
+/// "merely stale" risk signals (never cloud sync, never a veto). A stale Keep can reach Review at most.
 /// </summary>
 public sealed class AssessmentCombiner
 {
     private static readonly int GroupCount = Enum.GetValues<EvidenceGroup>().Length;
 
-    private readonly SmartCleanupOptions _options;
+    /// <summary>The "this is only stale / not recently used" risks that completed quiet observation may relieve.</summary>
+    private static readonly HashSet<ReasonCode> ReliefCodes = new()
+    {
+        ReasonCode.OrphanedAppData, ReasonCode.ProjectRoot, ReasonCode.RecentlyOpened, ReasonCode.RecentlyModified,
+    };
 
-    public AssessmentCombiner(SmartCleanupOptions options) => _options = options;
+    /// <summary>Evidence that makes quiet observation irrelevant: it must not help these items towards deletion at all.</summary>
+    private static readonly HashSet<ReasonCode> QuietBlockers = new()
+    {
+        ReasonCode.ContainsUserDocuments, ReasonCode.ContainsCredentials, ReasonCode.SystemProtected, ReasonCode.SensitiveLocation,
+        ReasonCode.BrowserProfile, ReasonCode.UserSettingsOrSaves, ReasonCode.VersionControlRepo,
+    };
+
+    private readonly SmartCleanupOptions _options;
+    private readonly ObservationOptions _observation;
+
+    public AssessmentCombiner(SmartCleanupOptions options, ObservationOptions? observation = null)
+    {
+        _options = options;
+        _observation = observation ?? new ObservationOptions();
+    }
+
+    private static bool IsQuietEvidence(Signal s) => s.Code == ReasonCode.ObservedInactive && s.JunkLlr > 0;
 
     public JunkAssessment Combine(AssessmentContext ctx, IReadOnlyList<Signal> input)
     {
         var signals = new List<Signal>(input);
         var coverage = ComputeCoverage(ctx, signals);
 
+        var quiet = signals.Where(IsQuietEvidence).ToList();
+        if (quiet.Count == 0)
+            return Evaluate(ctx, signals, coverage, relief: 0);
+
+        // What would this item be without observation? Quiet evidence may only move an item that is already suspicious.
+        var withoutQuiet = signals.Where(s => !IsQuietEvidence(s)).ToList();
+        var baseline = Evaluate(ctx, withoutQuiet, coverage, relief: 0);
+
+        Signal? blocker = null;
+        foreach (var s in withoutQuiet)
+        {
+            if (s.HardKeep || QuietBlockers.Contains(s.Code))
+            {
+                blocker = s;
+                break;
+            }
+        }
+
+        bool staleKeep = baseline.Tier == CleanupTier.Keep &&
+                         withoutQuiet.Any(s => s.Code is ReasonCode.LongUntouched or ReasonCode.OrphanedAppData);
+        bool tierAllows = baseline.Tier is CleanupTier.Review or CleanupTier.Likely || staleKeep;
+        if (staleKeep && withoutQuiet.Any(s => s.Code == ReasonCode.SyncedFolder))
+            blocker ??= withoutQuiet.First(s => s.Code == ReasonCode.SyncedFolder);
+        if (!tierAllows || blocker is not null)
+        {
+            var why = !tierAllows ? $"it is '{baseline.TierLabel}' without it" : $"blocked by \"{blocker!.Value.Code.ToTitle()}\"";
+            return WithReasons(baseline, baseline.Reasons.Append(new Signal(ReasonCode.ObservedInactive, EvidenceGroup.Observation, 0, 0,
+                $"stayed quiet, but this is not applied: {why}")).ToList());
+        }
+
+        // Relief is only for items that carry no cloud-sync risk (deleting there propagates to other devices).
+        bool reliefAllowed = !withoutQuiet.Any(s => s.Code == ReasonCode.SyncedFolder);
+        var relief = reliefAllowed ? Math.Clamp(quiet.Max(q => q.RiskRelief), 0, Math.Clamp(_observation.MaxRiskRelief, 0, 1)) : 0;
+
+        var lifted = Evaluate(ctx, signals, coverage, relief);
+
+        // never more than one step above what the item reached on its own
+        var ceiling = staleKeep
+            ? CleanupTier.Review
+            : (CleanupTier)Math.Min((int)baseline.Tier + 1, (int)CleanupTier.Safe);
+        return lifted.Tier > ceiling ? WithTier(lifted, ceiling) : lifted;
+    }
+
+    private static JunkAssessment WithReasons(JunkAssessment a, IReadOnlyList<Signal> reasons) => new()
+    {
+        JunkScore = a.JunkScore, DeletionRisk = a.DeletionRisk, Confidence = a.Confidence, Coverage = a.Coverage, Tier = a.Tier,
+        Reasons = reasons, SelectionSafetyComplete = a.SelectionSafetyComplete, SelectionBlockReason = a.SelectionBlockReason,
+    };
+
+    private static JunkAssessment WithTier(JunkAssessment a, CleanupTier tier) => new()
+    {
+        JunkScore = a.JunkScore, DeletionRisk = a.DeletionRisk, Confidence = a.Confidence, Coverage = a.Coverage, Tier = tier,
+        Reasons = a.Reasons, SelectionSafetyComplete = a.SelectionSafetyComplete, SelectionBlockReason = a.SelectionBlockReason,
+    };
+
+    private JunkAssessment Evaluate(AssessmentContext ctx, List<Signal> signals, double coverage, double relief)
+    {
         var pos = new double[GroupCount];
         var neg = new double[GroupCount];
         var risk = new double[GroupCount];
@@ -37,7 +119,8 @@ public sealed class AssessmentCombiner
             int g = (int)s.Group;
             if (s.JunkLlr > pos[g]) pos[g] = s.JunkLlr;
             if (s.JunkLlr < neg[g]) neg[g] = s.JunkLlr;
-            if (s.Risk > risk[g]) risk[g] = s.Risk;
+            var r = relief > 0 && ReliefCodes.Contains(s.Code) ? s.Risk * (1 - relief) : s.Risk;
+            if (r > risk[g]) risk[g] = r;
             hardKeep |= s.HardKeep;
             isProtected |= s.Code == ReasonCode.SystemProtected;
         }

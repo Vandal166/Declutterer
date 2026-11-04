@@ -18,10 +18,31 @@ namespace Declutterer.Domain.Services.Deletion;
 public sealed class DeleteService : IDeleteService
 {
     private readonly IDeletionHistoryRepository _historyRepository;
+    private readonly IPreDeleteRevalidator? _revalidator;
 
-    public DeleteService(IDeletionHistoryRepository historyRepository)
+    public DeleteService(IDeletionHistoryRepository historyRepository, IPreDeleteRevalidator? revalidator = null)
     {
         _historyRepository = historyRepository ?? throw new ArgumentNullException(nameof(historyRepository));
+        _revalidator = revalidator;
+    }
+
+    /// <summary>
+    /// The last look before something is deleted. Returns an error to record when the item must not be deleted (it changed since it
+    /// was assessed), null when it may go ahead. Items without observation history are always allowed.
+    /// </summary>
+    private async Task<string?> RevalidateAsync(TreeNode item, CancellationToken cancellationToken)
+    {
+        if (_revalidator is null)
+            return null;
+
+        var verdict = await _revalidator.RevalidateAsync(item, cancellationToken);
+        return verdict.Allowed ? null : verdict.Reason ?? "the item changed since it was assessed";
+    }
+
+    private async Task NotifyDeletedAsync(TreeNode item)
+    {
+        if (_revalidator is not null)
+            await _revalidator.MarkDeletedAsync(item, CancellationToken.None);
     }
 
     public async Task<DeleteResult> MoveToRecycleBinAsync(ObservableCollection<TreeNode> items,
@@ -53,6 +74,15 @@ public sealed class DeleteService : IDeleteService
                 };
                 progress?.Report(progressData);
 
+                var blocked = await RevalidateAsync(item, cancellationToken);
+                if (blocked is not null)
+                {
+                    Log.Warning("Not moving {Path} to the recycle bin: {Reason}", path, blocked);
+                    result.FailedCount++;
+                    result.Errors.Add(new DeletionError { ItemPath = path, ErrorMessage = blocked });
+                    continue;
+                }
+
                 // Move to Recycle Bin using platform-specific methods
                 await MoveToRecycleBinAsync(path);
                 Log.Information("Moved to recycle bin: {Path}", path);
@@ -62,6 +92,7 @@ public sealed class DeleteService : IDeleteService
 
                 // Record to deletion history
                 await RecordDeletionHistoryAsync(item, "RecycleBin");
+                await NotifyDeletedAsync(item);
 
                 // Remove from the collection ONLY after successful deletion
                 items.Remove(item);
@@ -117,6 +148,15 @@ public sealed class DeleteService : IDeleteService
                 };
                 progress?.Report(progressData);
 
+                var blocked = await RevalidateAsync(item, cancellationToken);
+                if (blocked is not null)
+                {
+                    Log.Warning("Not deleting {Path}: {Reason}", path, blocked);
+                    result.FailedCount++;
+                    result.Errors.Add(new DeletionError { ItemPath = path, ErrorMessage = blocked });
+                    continue;
+                }
+
                 // Permanently delete the item
                 if (File.Exists(path))
                 {
@@ -140,6 +180,7 @@ public sealed class DeleteService : IDeleteService
 
                 // Record to deletion history
                 await RecordDeletionHistoryAsync(item, "Permanent");
+                await NotifyDeletedAsync(item);
 
                 // Remove from the collection after successful deletion
                 items.Remove(item);

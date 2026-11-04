@@ -28,14 +28,28 @@ public sealed class ConfirmationDialogService : IConfirmationDialogService
                 "Owner window has not been set. Call SetOwnerWindow() before showing confirmation dialogs.");
         }
 
-        var result = await ShowConfirmationDialogAsync(title, message, _ownerWindow);
+        var result = await ShowConfirmationDialogAsync(title, message, _ownerWindow, "Delete", destructive: true);
         return result;
     }
 
-    //TODO the action buttons may not be visible if the content is too long
-    private static Task<bool> ShowConfirmationDialogAsync(string title, string message, Window owner)
+    public async Task<bool> ShowConfirmationAsync(string title, string message, string confirmText)
+    {
+        if (_ownerWindow is null)
+        {
+            throw new InvalidOperationException(
+                "Owner window has not been set. Call SetOwnerWindow() before showing confirmation dialogs.");
+        }
+
+        return await ShowConfirmationDialogAsync(title, message, _ownerWindow, confirmText, destructive: false);
+    }
+
+    private static Task<bool> ShowConfirmationDialogAsync(string title, string message, Window owner, string confirmText, bool destructive)
     {
         var tcs = new TaskCompletionSource<bool>();
+        var screen = owner.Screens.ScreenFromWindow(owner);
+        var maxDialogHeight = screen is null
+            ? 650
+            : screen.WorkingArea.Height / screen.Scaling * 0.9;
 
         var dialog = new Window
         {
@@ -44,16 +58,16 @@ public sealed class ConfirmationDialogService : IConfirmationDialogService
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Width = 500,
-            Height = 200,
+            MaxHeight = maxDialogHeight,
             CanResize = false,
             Topmost = true
         };
 
-        var content = new StackPanel
+        var content = new Grid
         {
             Margin = new Thickness(20),
-            Spacing = 15,
-            VerticalAlignment = VerticalAlignment.Center
+            RowDefinitions = new RowDefinitions("Auto,*,Auto"),
+            RowSpacing = 15
         };
 
         // Title area
@@ -80,6 +94,12 @@ public sealed class ConfirmationDialogService : IConfirmationDialogService
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Top
+        };
+
+        var messageScrollViewer = new ScrollViewer
+        {
+            Content = messageText,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
         };
 
         // Button panel
@@ -109,10 +129,10 @@ public sealed class ConfirmationDialogService : IConfirmationDialogService
         // OK button
         var okButton = new Button
         {
-            Content = "Delete",
+            Content = confirmText,
             Padding = new Thickness(30, 8),
             IsDefault = true,
-            Background = new SolidColorBrush(Colors.Red),
+            Background = new SolidColorBrush(destructive ? Colors.Red : Colors.CornflowerBlue),
             Foreground = new SolidColorBrush(Colors.White)
         };
         okButton.Click += (_, _) =>
@@ -128,7 +148,9 @@ public sealed class ConfirmationDialogService : IConfirmationDialogService
         buttonPanel.Children.Add(okButton);
 
         content.Children.Add(titlePanel);
-        content.Children.Add(messageText);
+        Grid.SetRow(messageScrollViewer, 1);
+        content.Children.Add(messageScrollViewer);
+        Grid.SetRow(buttonPanel, 2);
         content.Children.Add(buttonPanel);
 
         dialog.Content = content;

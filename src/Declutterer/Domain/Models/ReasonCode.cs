@@ -43,6 +43,18 @@ public enum ReasonCode
     UserSettingsOrSaves,
     BrowserProfile,
     IncompleteEvidence,
+
+    // ── Evidence from observing an item over time (see docs/Observation.md) ──
+    /// <summary>It was seen in use (or only weakly touched) while being watched.</summary>
+    ObservedActive,
+    /// <summary>It stayed untouched for its whole observation window. Bounded, expiring evidence.</summary>
+    ObservedInactive,
+    /// <summary>Observation could not reach a conclusion (incomplete walks, too few days the machine was on).</summary>
+    ObservationInconclusive,
+    /// <summary>It was moved or renamed while being watched.</summary>
+    ObservedMoved,
+    /// <summary>The user pinned or snoozed it: never suggested for deletion.</summary>
+    PinnedByUser,
 }
 
 public static class ReasonCodeExtensions
@@ -84,6 +96,11 @@ public static class ReasonCodeExtensions
         ReasonCode.UserSettingsOrSaves => "User settings / saved games",
         ReasonCode.BrowserProfile => "Browser profile",
         ReasonCode.IncompleteEvidence => "Incomplete evidence",
+        ReasonCode.ObservedActive => "Observed in use",
+        ReasonCode.ObservedInactive => "Observed unused",
+        ReasonCode.ObservationInconclusive => "Observation inconclusive",
+        ReasonCode.ObservedMoved => "Observed moved or renamed",
+        ReasonCode.PinnedByUser => "Kept by you",
         _ => code.ToString()
     };
 }

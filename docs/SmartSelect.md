@@ -50,6 +50,11 @@ Every rule emits `Signal`s (`ReasonCode`, configured evidence family, heuristic 
 | `ProjectRule` | git repositories (**veto**), project folders |
 | `SensitiveLocationRule` | `.ssh`, `.gnupg`, `.aws`, DPAPI/credential stores, UWP package data (**vetoes**), browser profiles, saved games, Windows-managed AppData |
 | `StalenessRule` | bounded, smooth age curve; recency is *strong* evidence of life; neutralised inside caches (they are rewritten constantly) |
+| `ObservationRule` | what *watching* an item over time showed (in use / unused / inconclusive / pinned); applied by the combiner only where it may matter - see [Observation.md](Observation.md) |
+
+## Observation: evidence over time
+
+Observation suggestions can include **unselected suspicious folders** (Review / Likely) and **stale folders** that remain Keep despite independent `LongUntouched` or `OrphanedAppData` evidence. Discovery walks the selected roots independently of the lazy results tree, follows the scan filters and hidden-folder setting, and reports coverage or partial results when access or safety limits stop the walk. The old 16 MB cutoff only affects ranking. Watching never selects or deletes a folder. A completed, still-valid quiet period can lift a stale Keep to Review at most, or lift an already suspicious item by one tier; it never overrides safety blockers, valuable content, or cloud-sync risk. The candidate tooltip keeps junk score, cleanup tier, and deletion risk distinct. Details, data stored and the decisions taken: [Observation.md](Observation.md).
 
 ## Safety (defence in depth)
 

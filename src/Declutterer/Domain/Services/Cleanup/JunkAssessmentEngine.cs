@@ -9,6 +9,7 @@ using Declutterer.Abstractions;
 using Declutterer.Domain.Models;
 using Declutterer.Domain.Services.Cleanup.Rules;
 using Declutterer.Domain.Services.Deletion;
+using Declutterer.Domain.Services.Observation;
 using Declutterer.Utilities.Exceptions;
 
 namespace Declutterer.Domain.Services.Cleanup;
@@ -22,6 +23,12 @@ public sealed record AnalysisProgress(string Stage, int Done, int Total);
 public sealed class AnalysisSession
 {
     public FactsMemo Memo { get; } = new();
+
+    /// <summary>
+    /// What watching items over time showed, loaded once before the run (the rules run in parallel loops and never touch the
+    /// database). Null means "no observation evidence": every item is assessed exactly as it was before the feature existed.
+    /// </summary>
+    public IObservationLookup? Observations { get; set; }
 
     private readonly ConcurrentDictionary<string, DirectorySafetyScanResult> _safety = new(StringComparer.OrdinalIgnoreCase);
 
@@ -43,6 +50,9 @@ public sealed class AnalysisSession
 public sealed class AnalysisResult
 {
     public required IReadOnlyDictionary<NodeSnapshot, JunkAssessment> Assessments { get; init; }
+
+    /// <summary>The disk facts collected for the directories that were inspected (the others are simply absent).</summary>
+    public IReadOnlyDictionary<NodeSnapshot, DirectoryFacts>? Facts { get; init; }
     public int NodesAnalyzed { get; init; }
     public int DirectoriesInspected { get; init; }
     public int DirectoriesTruncated { get; init; }
@@ -70,11 +80,17 @@ public sealed class JunkAssessmentEngine
     private readonly DirectoryFactsCollector _collector;
     private readonly DirectorySafetyScanner _safetyScanner;
     private readonly Func<string, string?> _safetyGate;
+    private readonly ObservationOptions _observationOptions;
 
     public JunkAssessmentEngine() : this(DefaultRules(), new DirectoryFactsCollector(), DefaultSafetyGate) { }
 
-    public JunkAssessmentEngine(IEnumerable<IAssessmentRule> rules, DirectoryFactsCollector collector, Func<string, string?> safetyGate)
+    public JunkAssessmentEngine(ObservationOptions observationOptions)
+        : this(DefaultRules(observationOptions), new DirectoryFactsCollector(), DefaultSafetyGate, observationOptions) { }
+
+    public JunkAssessmentEngine(IEnumerable<IAssessmentRule> rules, DirectoryFactsCollector collector, Func<string, string?> safetyGate,
+        ObservationOptions? observationOptions = null)
     {
+        _observationOptions = observationOptions ?? new ObservationOptions();
         _rules = rules.ToList();
         _collector = collector;
         _safetyScanner = new DirectorySafetyScanner();
@@ -82,7 +98,7 @@ public sealed class JunkAssessmentEngine
     }
 
     /// <summary>Order matters: location rules run first because later rules react to "this is a cache".</summary>
-    public static IReadOnlyList<IAssessmentRule> DefaultRules() => new IAssessmentRule[]
+    public static IReadOnlyList<IAssessmentRule> DefaultRules(ObservationOptions? observation = null) => new IAssessmentRule[]
     {
         new KnownLocationRule(),
         new RegenerableArtifactRule(),
@@ -93,6 +109,7 @@ public sealed class JunkAssessmentEngine
         new ContentRule(),
         new OrphanedAppDataRule(),
         new StalenessRule(),
+        new ObservationRule(observation),
     };
 
     /// <summary>Returns null if the path may be deleted, otherwise the reason it is protected. Fails closed.</summary>
@@ -121,14 +138,15 @@ public sealed class JunkAssessmentEngine
         IProgress<AnalysisProgress>? progress = null, CancellationToken cancellationToken = default, AnalysisSession? session = null)
     {
         var started = DateTime.UtcNow;
-        var deadline = started + options.TimeBudget; // disk inspection (stage B)
+        bool unlimitedBudget = options.TimeBudget == Timeout.InfiniteTimeSpan;
+        var deadline = unlimitedBudget ? DateTime.MaxValue : started + options.TimeBudget; // disk inspection (stage B)
         session ??= new AnalysisSession();
 
         // Descendant safety scans get their own allotment of TimeBudget. They used to share the clock with the disk
         // inspection, so walking big folders of old personal data used up the time and every junk folder that came
         // afterwards was reported as "incomplete", which can never be selected.
         var safetySpent = TimeSpan.Zero;
-        DateTime SafetyDeadline() => DateTime.UtcNow + (options.TimeBudget - safetySpent);
+        DateTime SafetyDeadline() => unlimitedBudget ? DateTime.MaxValue : DateTime.UtcNow + (options.TimeBudget - safetySpent);
         var passSafety = new ConcurrentDictionary<string, DirectorySafetyScanResult>(StringComparer.OrdinalIgnoreCase);
         int incompleteSafety = 0, notInspected = 0;
         var po = new ParallelOptions
@@ -138,7 +156,7 @@ public sealed class JunkAssessmentEngine
         };
 
         var markers = new MarkerCache();
-        var combiner = new AssessmentCombiner(options);
+        var combiner = new AssessmentCombiner(options, _observationOptions);
         var accessReliable = machine.LastAccessTimeReliable ||
                              AccessTimeLooksMaintained(roots.SelectMany(r => r.SelfAndDescendants()).Take(20_000), machine.UtcNow);
 
@@ -160,7 +178,7 @@ public sealed class JunkAssessmentEngine
             var results = new (AssessmentContext Ctx, List<Signal> Signals, JunkAssessment Assessment)[batch.Length];
             Parallel.For(0, batch.Length, po, i =>
             {
-                results[i] = Evaluate(batch[i], null, machine, options, markers, accessReliable, combiner);
+                results[i] = Evaluate(batch[i], null, machine, options, markers, accessReliable, combiner, session.Observations);
             });
 
             var stageASafety = new DirectorySafetyScanResult?[batch.Length];
@@ -188,7 +206,7 @@ public sealed class JunkAssessmentEngine
                 signals.Add(results[i].Signals);
                 assessments.Add(results[i].Assessment);
 
-                bool coveredByThisNode = batch[i].IsDirectory && !results[i].Assessment.HasHardKeep &&
+                bool coveredByThisNode = !options.PreserveAllDescendants && batch[i].IsDirectory && !results[i].Assessment.HasHardKeep &&
                                          SignalSink.IsDisposableRegion(results[i].Signals) &&
                                          stageASafety[i]?.CanAutoSelect == true;
                 if (!coveredByThisNode)
@@ -269,7 +287,7 @@ public sealed class JunkAssessmentEngine
             var withFacts = targets.Where(i => facts[i] is not null).ToArray();
             Parallel.ForEach(withFacts, po, i =>
             {
-                var (ctx, sig, a) = Evaluate(nodes[i], facts[i], machine, options, markers, accessReliable, combiner);
+                var (ctx, sig, a) = Evaluate(nodes[i], facts[i], machine, options, markers, accessReliable, combiner, session.Observations);
                 contexts[i] = ctx;
                 signals[i] = sig;
                 assessments[i] = TryGetKnownSafety(nodes[i].Path, session, passSafety, out var safety)
@@ -322,12 +340,18 @@ public sealed class JunkAssessmentEngine
         }
 
         var map = new Dictionary<NodeSnapshot, JunkAssessment>(count);
+        var factsMap = new Dictionary<NodeSnapshot, DirectoryFacts>();
         for (int i = 0; i < count; i++)
+        {
             map[nodes[i]] = assessments[i];
+            if (facts[i] is { } f)
+                factsMap[nodes[i]] = f;
+        }
 
         return new AnalysisResult
         {
             Assessments = map,
+            Facts = factsMap,
             NodesAnalyzed = count,
             DirectoriesInspected = inspected,
             DirectoriesTruncated = truncated,
@@ -363,6 +387,18 @@ public sealed class JunkAssessmentEngine
         var result = _safetyScanner.Scan(node.Path, machine, options, deadline, _safetyGate, cancellationToken);
         session.PublishSafety(node.Path, result); // time-outs are not remembered across passes ...
         pass[PathKey.Normalize(node.Path)] = result; // ... but are within this pass, so nothing is scanned twice
+        return result;
+    }
+
+    /// <summary>Completes the descendant safety gate for a stale Keep folder offered for observation.</summary>
+    public DirectorySafetyScanResult EnsureObservationSafety(NodeSnapshot node, ISystemSnapshot machine, SmartCleanupOptions options,
+        AnalysisSession session, CancellationToken cancellationToken = default)
+    {
+        if (session.TryGetSafety(node.Path, out var cached))
+            return cached;
+
+        var result = _safetyScanner.Scan(node.Path, machine, options, DateTime.MaxValue, _safetyGate, cancellationToken);
+        session.PublishSafety(node.Path, result);
         return result;
     }
 
@@ -402,9 +438,11 @@ public sealed class JunkAssessmentEngine
     };
 
     private (AssessmentContext, List<Signal>, JunkAssessment) Evaluate(NodeSnapshot node, DirectoryFacts? facts, ISystemSnapshot machine,
-        SmartCleanupOptions options, MarkerCache markers, bool accessReliable, AssessmentCombiner combiner)
+        SmartCleanupOptions options, MarkerCache markers, bool accessReliable, AssessmentCombiner combiner, IObservationLookup? observations = null)
     {
-        var ctx = new AssessmentContext(node, machine, options, markers, facts, accessReliable);
+        ObservationSummary? observed = null;
+        observations?.TryGet(node.Path, out observed);
+        var ctx = new AssessmentContext(node, machine, options, markers, facts, accessReliable, observed);
         var sink = new SignalSink();
         foreach (var rule in _rules)
             rule.Evaluate(ctx, sink);
@@ -420,26 +458,22 @@ public sealed class JunkAssessmentEngine
     /// </summary>
     public static bool AccessTimeLooksMaintained(IEnumerable<NodeSnapshot> nodes, DateTime nowUtc)
     {
-        int sampled = 0, live = 0;
-        foreach (var n in nodes)
+        return AccessTimeProbe.LooksMaintained(Samples(nodes, nowUtc), nowUtc);
+
+        static IEnumerable<(DateTime AccessUtc, DateTime WriteUtc, DateTime CreatedUtc)> Samples(IEnumerable<NodeSnapshot> source, DateTime now)
         {
-            if (n.IsDirectory || n.LastAccessUtc is not { } access || n.LastWriteUtc is not { } write)
-                continue;
-            if ((nowUtc - write).TotalDays < 7)
-                continue;
+            foreach (var n in source)
+            {
+                if (n.IsDirectory || n.LastAccessUtc is not { } access || n.LastWriteUtc is not { } write)
+                    continue;
+                if ((now - write).TotalDays < 7)
+                    continue; // fresh files always look "accessed after creation"; skip before paying for the creation-time lookup
 
-            DateTime created;
-            try { created = File.GetCreationTimeUtc(n.Path); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { continue; }
-            if (created.Year < 1700)
-                continue;
-
-            sampled++;
-            if ((access - created).TotalDays >= 1)
-                live++;
-            if (sampled >= 1000)
-                break;
+                DateTime created;
+                try { created = File.GetCreationTimeUtc(n.Path); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { continue; }
+                yield return (access, write, created);
+            }
         }
-        return sampled >= 20 && live / (double)sampled >= 0.05;
     }
 }

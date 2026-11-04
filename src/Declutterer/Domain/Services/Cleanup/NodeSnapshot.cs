@@ -15,7 +15,7 @@ public sealed class NodeSnapshot
     public required string Path { get; init; }
     public required string Name { get; init; }
     public bool IsDirectory { get; init; }
-    public long Size { get; init; }
+    public long Size { get; set; }
     public DateTime? LastWriteUtc { get; init; }
     public DateTime? LastAccessUtc { get; init; }
     public int Depth { get; init; }
@@ -52,6 +52,51 @@ public sealed class NodeSnapshot
             snap.Children.Add(FromTreeNode(child, snap));
 
         return snap;
+    }
+
+    /// <summary>
+    /// A one-item tree for assessing a single folder outside the loaded tree (a watched item that is being reassessed): a synthetic
+    /// root (its parent folder) with this item as its only child. The size comes from the caller, which has just walked the item.
+    /// </summary>
+    public static NodeSnapshot ForStandalone(string path, long sizeBytes)
+    {
+        var normalized = PathKey.Normalize(path);
+        var parentPath = System.IO.Path.GetDirectoryName(normalized) ?? normalized;
+        var root = new NodeSnapshot
+        {
+            Path = parentPath,
+            Name = System.IO.Path.GetFileName(parentPath),
+            IsDirectory = true,
+            Depth = 0,
+        };
+
+        var info = new System.IO.DirectoryInfo(normalized);
+        var item = new NodeSnapshot
+        {
+            Path = normalized,
+            Name = info.Name,
+            IsDirectory = true,
+            Size = sizeBytes,
+            LastWriteUtc = SafeUtc(() => info.LastWriteTimeUtc),
+            LastAccessUtc = SafeUtc(() => info.LastAccessTimeUtc),
+            Depth = 1,
+            Parent = root,
+        };
+        root.Children.Add(item);
+        return item;
+    }
+
+    private static DateTime? SafeUtc(Func<DateTime> read)
+    {
+        try
+        {
+            var t = read();
+            return t.Year < 1700 ? null : t;
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Depth-first enumeration of this node and all descendants.</summary>

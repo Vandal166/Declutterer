@@ -80,7 +80,7 @@ public sealed class JunkAssessment
     {
         var lines = new List<string> { Summary };
         foreach (var r in Reasons
-                     .Where(r => r.JunkLlr != 0 || r.Risk >= 0.2 || r.HardKeep)
+                     .Where(r => r.JunkLlr != 0 || r.Risk >= 0.2 || r.HardKeep || r.Group == EvidenceGroup.Observation)
                      .Take(maxReasons))
         {
             var mark = r.HardKeep ? "!" : r.JunkLlr > 0 ? "+" : "-";

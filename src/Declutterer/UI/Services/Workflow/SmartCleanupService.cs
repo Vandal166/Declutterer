@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using Declutterer.Abstractions;
 using Declutterer.Domain.Models;
 using Declutterer.Domain.Services.Cleanup;
+using Declutterer.Domain.Services.Observation;
+using Declutterer.Domain.Services.Scanning;
 using Declutterer.Utilities.Helpers;
 using Serilog;
 using ScanOptions = Declutterer.Domain.Models.ScanOptions;
@@ -32,10 +34,19 @@ public sealed class SmartCleanupService : ISmartCleanupService
     private readonly ICommandService _commandService;
     private readonly IDispatcher _dispatcher;
     private readonly SmartCleanupOptions _options;
+    private readonly IObservationLedger? _ledger;
+    private readonly ObservationOptions _observationOptions;
+    private readonly TimeProvider _time;
+    private readonly ObservationCandidateDiscoveryService _observationDiscovery;
 
     public SmartCleanupService(JunkAssessmentEngine engine, SmartCleanupSelector selector, ISystemSnapshotProvider snapshotProvider,
-        ITreeNavigationService treeNavigation, ICommandService commandService, IDispatcher dispatcher, SmartCleanupOptions? options = null)
+        ITreeNavigationService treeNavigation, ICommandService commandService, IDispatcher dispatcher, SmartCleanupOptions? options = null,
+        IObservationLedger? observationLedger = null, ObservationOptions? observationOptions = null, TimeProvider? timeProvider = null,
+        ScanFilterService? scanFilterService = null)
     {
+        _ledger = observationLedger;
+        _observationOptions = observationOptions ?? new ObservationOptions();
+        _time = timeProvider ?? TimeProvider.System;
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _selector = selector ?? throw new ArgumentNullException(nameof(selector));
         _snapshotProvider = snapshotProvider ?? throw new ArgumentNullException(nameof(snapshotProvider));
@@ -43,17 +54,37 @@ public sealed class SmartCleanupService : ISmartCleanupService
         _commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _options = options ?? new SmartCleanupOptions();
+        _observationDiscovery = new ObservationCandidateDiscoveryService(
+            scanFilterService ?? new ScanFilterService(new ScanFilterBuilder()), _engine);
     }
 
     public async Task<SmartCleanupResult> SelectAsync(IReadOnlyList<TreeNode> roots, SmartSelectMode mode, ScanOptions? scanOptions,
-        ObservableHashSet<TreeNode> selectedNodes, CancellationToken cancellationToken = default)
+        ObservableHashSet<TreeNode> selectedNodes, CancellationToken cancellationToken = default,
+        IProgress<SmartCleanupProgress>? progress = null, Func<bool>? isCurrentScope = null)
     {
         if (roots.Count == 0)
             return SmartCleanupResult.Empty;
 
         var clock = Stopwatch.StartNew();
+        var startedUtc = _time.GetUtcNow().UtcDateTime;
         var machine = await _snapshotProvider.CaptureAsync(cancellationToken);
-        var session = new AnalysisSession();
+
+        // Observation evidence is only used when the user switched the feature on and the ledger is usable. A ledger that fails to load
+        // simply means "no observation evidence": the run is then exactly what it was before the feature existed.
+        bool observing = _observationOptions.Enabled && _ledger is { IsAvailable: true };
+        IObservationLookup? lookup = null;
+        if (observing)
+        {
+            try
+            {
+                lookup = await _ledger!.LoadLookupAsync(cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Log.Warning(ex, "Smart Select could not load the observation ledger; continuing without observation evidence");
+            }
+        }
+        var session = new AnalysisSession { Observations = lookup };
         var attempted = new HashSet<TreeNode>();
 
         List<NodeSnapshot> snapshots;
@@ -66,7 +97,9 @@ public sealed class SmartCleanupService : ISmartCleanupService
 
             // The tree is a UI object (lazy loading mutates it on the UI thread), so it is copied there first.
             snapshots = await _dispatcher.InvokeAsync(() => roots.Select(r => NodeSnapshot.FromTreeNode(r)).ToList());
-            analysis = await _engine.AnalyzeAsync(snapshots, machine, _options, null, cancellationToken, session);
+            var engineProgress = progress is null ? null : new Progress<AnalysisProgress>(p =>
+                progress.Report(new SmartCleanupProgress(p.Stage, p.Done, p.Total)));
+            analysis = await _engine.AnalyzeAsync(snapshots, machine, _options, engineProgress, cancellationToken, session);
 
             // A pass that ran out of time used to end the whole run, which meant a big scan was never looked into at all.
             // Completed facts and safety scans are remembered by the session, so another pass only has to do what is new.
@@ -100,8 +133,24 @@ public sealed class SmartCleanupService : ISmartCleanupService
 
         var plan = _selector.Plan(snapshots, analysis.Assessments, mode, _options);
 
+        // Suspicious or independently stale folders are discovered separately from the selection plan below.
+        ObservationDiscoveryResult? observationDiscovery = null;
+        if (observing)
+        {
+            progress?.Report(new SmartCleanupProgress("Starting independent watch discovery", 0, 0, IsObservationDiscovery: true));
+            observationDiscovery = await _observationDiscovery.DiscoverAsync(roots, scanOptions, machine, _options,
+                _observationOptions, lookup, plan.Selected.Select(n => n.Path), progress, cancellationToken);
+        }
+
+        bool scopeCurrent = true;
         await _dispatcher.InvokeAsync(() =>
         {
+            if (isCurrentScope is not null && !isCurrentScope())
+            {
+                scopeCurrent = false;
+                return;
+            }
+
             // annotate every node of the final snapshot (nodes below a region that is taken whole carry no assessment)
             foreach (var snap in snapshots.SelectMany(s => s.SelfAndDescendants()))
             {
@@ -120,15 +169,23 @@ public sealed class SmartCleanupService : ISmartCleanupService
         });
 
         clock.Stop();
+        if (observing)
+        {
+            // this run read the tree itself: later access-time comparisons must not mistake that for use
+            await _ledger!.RecordOwnActivityAsync(startedUtc, _time.GetUtcNow().UtcDateTime, "smart-select", CancellationToken.None);
+        }
+        int selectedCount = scopeCurrent ? plan.Selected.Count : 0;
+        long selectedBytes = scopeCurrent ? plan.TotalBytes : 0;
         Log.Information(
             "Smart Select ({Mode}): analysed {Analyzed} nodes, inspected {Inspected} folders, selected {Selected} items in {Elapsed} ms " +
             "(loaded {Loaded} folders, {Unexplored} left unexplored, {IncompleteScans} incomplete safety scans, {NotInspected} not inspected)",
-            mode, analysis.NodesAnalyzed, analysis.DirectoriesInspected, plan.Selected.Count, clock.ElapsedMilliseconds,
+            mode, analysis.NodesAnalyzed, analysis.DirectoriesInspected, selectedCount, clock.ElapsedMilliseconds,
             foldersLoaded, unexplored, analysis.IncompleteSafetyScans, analysis.DirectoriesNotInspected);
 
-        return new SmartCleanupResult(plan.Selected.Count, plan.TotalBytes, analysis.NodesAnalyzed, plan.SafeCount, plan.LikelyCount,
-            plan.ReviewCount, analysis.BudgetExceeded, clock.Elapsed, foldersLoaded, unexplored, analysis.IncompleteSafetyScans,
-            analysis.DirectoriesNotInspected, stoppedByTime);
+        return new SmartCleanupResult(selectedCount, selectedBytes,
+            analysis.NodesAnalyzed, scopeCurrent ? plan.SafeCount : 0, scopeCurrent ? plan.LikelyCount : 0,
+            scopeCurrent ? plan.ReviewCount : 0, analysis.BudgetExceeded, clock.Elapsed, foldersLoaded, unexplored, analysis.IncompleteSafetyScans,
+            analysis.DirectoriesNotInspected, stoppedByTime, observationDiscovery?.Candidates, observationDiscovery?.Summary);
     }
 
     private async Task LoadDeeperAsync(IReadOnlyList<NodeSnapshot> targets, ScanOptions? scanOptions, CancellationToken cancellationToken)

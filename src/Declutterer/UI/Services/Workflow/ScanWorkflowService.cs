@@ -8,6 +8,7 @@ using Declutterer.Abstractions;
 using Declutterer.Domain.Models;
 using Declutterer.Domain.Services.Scanning;
 using Declutterer.UI.Services.Icons;
+using Serilog;
 
 namespace Declutterer.UI.Services.Workflow;
 
@@ -16,9 +17,14 @@ public sealed class ScanWorkflowService : IScanWorkflowService
     private readonly DirectoryScanService _directoryScanService;
     private readonly IconLoadingScheduler _iconLoadingScheduler;
     private readonly IDispatcher _dispatcher;
+    private readonly IOwnActivityRecorder? _ownActivity;
+    private readonly TimeProvider _time;
 
-    public ScanWorkflowService(DirectoryScanService directoryScanService, IconLoadingScheduler iconLoadingScheduler, IDispatcher dispatcher)
+    public ScanWorkflowService(DirectoryScanService directoryScanService, IconLoadingScheduler iconLoadingScheduler, IDispatcher dispatcher,
+        IOwnActivityRecorder? ownActivity = null, TimeProvider? timeProvider = null)
     {
+        _ownActivity = ownActivity;
+        _time = timeProvider ?? TimeProvider.System;
         _directoryScanService = directoryScanService;
         _iconLoadingScheduler = iconLoadingScheduler;
         _dispatcher = dispatcher;
@@ -26,6 +32,30 @@ public sealed class ScanWorkflowService : IScanWorkflowService
 
     /// <returns>true if at least one valid root was added and scanned, false if no valid roots were found or all roots had no children</returns>
     public async Task<bool> ExecuteScanAsync(ScanOptions scanOptions, ObservableCollection<TreeNode> roots)
+    {
+        var startedUtc = _time.GetUtcNow().UtcDateTime;
+        try
+        {
+            return await ExecuteScanCoreAsync(scanOptions, roots);
+        }
+        finally
+        {
+            // the scan (and the icon loading it triggers) reads the tree itself: later access-time comparisons must not mistake that for use
+            if (_ownActivity is not null)
+            {
+                try
+                {
+                    await _ownActivity.RecordOwnActivityAsync(startedUtc, _time.GetUtcNow().UtcDateTime, "scan");
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Could not record the scan as own activity");
+                }
+            }
+        }
+    }
+
+    private async Task<bool> ExecuteScanCoreAsync(ScanOptions scanOptions, ObservableCollection<TreeNode> roots)
     {
         _iconLoadingScheduler.ClearLoadedPathsCache();
 

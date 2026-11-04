@@ -29,6 +29,10 @@ public static class DependencyInjection
         collection.AddSingleton<ScanOptionsWindowViewModel>();
         collection.AddTransient<CleanupWindowViewModel>(); // Transient since each CleanupWindow gets a new instance with different selected nodes
         collection.AddTransient<HistoryWindowViewModel>(); // Transient for each history window instance
+        collection.AddSingleton<WatchlistViewModel>(); // the watchlist page (observation)
+
+        // observation: ledger, check-ins, revalidation, optional scheduling. Avalonia-free, so the headless --observe run uses the same registrations.
+        collection.AddObservationServices();
         
         collection.AddLogging(builder => builder.AddSerilog());
         
@@ -53,17 +57,15 @@ public static class DependencyInjection
         collection.AddSingleton<SmartSelectionScorer>();
         collection.AddSingleton<SmartSelectionService>();
 
-        // evidence based Smart Select (junk likelihood / deletion risk / confidence / reason codes)
-        collection.AddSingleton(_ => new JunkAssessmentEngine());
+        // evidence based Smart Select (junk likelihood / deletion risk / confidence / reason codes).
+        // The engine and the system snapshot provider are registered by AddObservationServices (the headless run needs them too).
         collection.AddSingleton<SmartCleanupSelector>();
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            collection.AddSingleton<ISystemSnapshotProvider, WindowsSystemSnapshotProvider>();
-        else
-            collection.AddSingleton<ISystemSnapshotProvider, DefaultSystemSnapshotProvider>();
         collection.AddSingleton<ISmartCleanupService>(sp => new SmartCleanupService(
             sp.GetRequiredService<JunkAssessmentEngine>(), sp.GetRequiredService<SmartCleanupSelector>(),
             sp.GetRequiredService<ISystemSnapshotProvider>(), sp.GetRequiredService<ITreeNavigationService>(),
-            sp.GetRequiredService<ICommandService>(), sp.GetRequiredService<IDispatcher>()));
+            sp.GetRequiredService<ICommandService>(), sp.GetRequiredService<IDispatcher>(), null,
+            sp.GetRequiredService<IObservationLedger>(), sp.GetRequiredService<Declutterer.Domain.Models.ObservationOptions>(),
+            sp.GetRequiredService<System.TimeProvider>(), sp.GetRequiredService<ScanFilterService>()));
         
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             collection.AddSingleton<IExplorerLauncher, WindowsExplorerLauncher>();

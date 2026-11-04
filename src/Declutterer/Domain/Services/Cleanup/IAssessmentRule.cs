@@ -21,8 +21,8 @@ public sealed class SignalSink
 
     public void Add(Signal s) => _signals.Add(s);
 
-    public void Add(ReasonCode code, EvidenceGroup group, double junkLlr, double risk, string detail, bool hardKeep = false) =>
-        _signals.Add(new Signal(code, group, junkLlr, risk, detail, hardKeep));
+    public void Add(ReasonCode code, EvidenceGroup group, double junkLlr, double risk, string detail, bool hardKeep = false, double riskRelief = 0) =>
+        _signals.Add(new Signal(code, group, junkLlr, risk, detail, hardKeep, riskRelief));
 
     public bool Has(ReasonCode code)
     {
@@ -67,8 +67,9 @@ public sealed class AssessmentContext
     private bool _appDataResolved;
 
     public AssessmentContext(NodeSnapshot node, ISystemSnapshot system, SmartCleanupOptions options, MarkerCache markers,
-        DirectoryFacts? facts, bool accessTimeReliable)
+        DirectoryFacts? facts, bool accessTimeReliable, ObservationSummary? observation = null)
     {
+        Observation = observation;
         Node = node;
         Machine = system;
         Options = options;
@@ -87,6 +88,9 @@ public sealed class AssessmentContext
     public DirectoryFacts? Facts { get; }
 
     public bool AccessTimeReliable { get; }
+
+    /// <summary>What watching this item over time showed, if it is on the watchlist (null otherwise).</summary>
+    public ObservationSummary? Observation { get; }
 
     public DateTime NowUtc => Machine.UtcNow;
     public bool IsDirectory => Node.IsDirectory;

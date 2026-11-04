@@ -96,6 +96,24 @@ public class DeleteServiceTests : IDisposable
             _service.DeletePermanentlyAsync(items, cancellationToken: cts.Token));
     }
 
+    [Fact]
+    public async Task DeletePermanentlyAsync_CancellationAfterRemovalDoesNotTurnSuccessIntoCancellation()
+    {
+        var path = Path.Combine(_tempDir.Path, "delete-after-cancel.txt");
+        await File.WriteAllTextAsync(path, "content");
+        var item = new TreeNode { Name = Path.GetFileName(path), FullPath = path, Size = 7 };
+        var items = new ObservableCollection<TreeNode> { item };
+        using var cts = new CancellationTokenSource();
+        var service = new DeleteService(_historyRepository, new CancellingAfterDeleteRevalidator(cts));
+
+        var result = await service.DeletePermanentlyAsync(items, cancellationToken: cts.Token);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, result.DeletedCount);
+        Assert.Empty(items);
+        Assert.False(File.Exists(path));
+    }
+
 
     [Fact]
     public async Task DeletePermanentlyAsync_MultipleNonExistentPaths_RecordsAllFailures()
@@ -187,6 +205,23 @@ public class DeleteServiceTests : IDisposable
     public void Dispose()
     {
         _tempDir.Dispose();
+    }
+
+    private sealed class CancellingAfterDeleteRevalidator : IPreDeleteRevalidator
+    {
+        private readonly CancellationTokenSource _cancellation;
+
+        public CancellingAfterDeleteRevalidator(CancellationTokenSource cancellation) => _cancellation = cancellation;
+
+        public Task<RevalidationResult> RevalidateAsync(TreeNode item, CancellationToken cancellationToken = default) =>
+            Task.FromResult(RevalidationResult.Ok);
+
+        public Task MarkDeletedAsync(TreeNode item, CancellationToken cancellationToken = default)
+        {
+            _cancellation.Cancel();
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
     }
 }
 

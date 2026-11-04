@@ -234,7 +234,7 @@ public class MainWindowViewModelTests
         var loadingDuringCall = false;
         _smartCleanupService
             .SelectAsync(Arg.Any<IReadOnlyList<TreeNode>>(), Arg.Any<SmartSelectMode>(), Arg.Any<ScanOptions?>(),
-                Arg.Any<ObservableHashSet<TreeNode>>(), Arg.Any<CancellationToken>())
+                Arg.Any<ObservableHashSet<TreeNode>>(), Arg.Any<CancellationToken>(), Arg.Any<IProgress<SmartCleanupProgress>>(), Arg.Any<Func<bool>>())
             .Returns(_ =>
             {
                 loadingDuringCall = viewModel.IsAnyNodeLoading;
@@ -244,7 +244,7 @@ public class MainWindowViewModelTests
         await viewModel.SmartSelectCommand.ExecuteAsync(null);
 
         await _smartCleanupService.Received(1).SelectAsync(Arg.Any<IReadOnlyList<TreeNode>>(), SmartSelectMode.Aggressive,
-            Arg.Any<ScanOptions?>(), viewModel.SelectedNodes, Arg.Any<CancellationToken>());
+            Arg.Any<ScanOptions?>(), viewModel.SelectedNodes, Arg.Any<CancellationToken>(), Arg.Any<IProgress<SmartCleanupProgress>>(), Arg.Any<Func<bool>>());
         Assert.True(loadingDuringCall);
         Assert.False(viewModel.IsAnyNodeLoading);
         Assert.Contains("Selected 3 items", viewModel.SmartSelectSummary);
@@ -258,7 +258,7 @@ public class MainWindowViewModelTests
         viewModel.Roots.Add(new TreeNode { Name = "Root" });
         _smartCleanupService
             .SelectAsync(Arg.Any<IReadOnlyList<TreeNode>>(), Arg.Any<SmartSelectMode>(), Arg.Any<ScanOptions?>(),
-                Arg.Any<ObservableHashSet<TreeNode>>(), Arg.Any<CancellationToken>())
+                Arg.Any<ObservableHashSet<TreeNode>>(), Arg.Any<CancellationToken>(), Arg.Any<IProgress<SmartCleanupProgress>>(), Arg.Any<Func<bool>>())
             .Returns(Task.FromException<SmartCleanupResult>(new InvalidOperationException("boom")));
 
         await viewModel.SmartSelectCommand.ExecuteAsync(null);

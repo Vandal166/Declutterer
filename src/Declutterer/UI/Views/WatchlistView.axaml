@@ -1,0 +1,339 @@
+<UserControl
+    HorizontalAlignment="Stretch"
+    VerticalAlignment="Stretch"
+    d:DesignHeight="600"
+    d:DesignWidth="1200"
+    mc:Ignorable="d"
+    x:Class="Declutterer.UI.Views.WatchlistView"
+    x:DataType="viewModels:WatchlistViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:viewModels="clr-namespace:Declutterer.UI.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid RowDefinitions="Auto,Auto,*">
+        <!--  Header: what this page is, the on/off switch, check-in now  -->
+        <Border
+            Background="#F5F5F5"
+            BorderBrush="#CCCCCC"
+            BorderThickness="0,0,0,1"
+            Grid.Row="0"
+            Padding="20">
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
+                <StackPanel
+                    Grid.Column="0"
+                    Grid.Row="0"
+                    Orientation="Vertical"
+                    Spacing="5">
+                    <TextBlock
+                        FontSize="18"
+                        FontWeight="SemiBold"
+                        Foreground="#333333"
+                        Text="Watchlist" />
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="#666666"
+                        Text="Folders the Smart Select feature finds suspicious but cannot call them safe to delete are here watched for a few weeks after turning this ON. If nothing uses them, that becomes a stronger indicator to delete them. Nothing is deleted from this page."
+                        TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel
+                    Grid.Column="1"
+                    Grid.Row="0"
+                    Orientation="Horizontal"
+                    Spacing="10"
+                    VerticalAlignment="Top">
+                    <Button
+                        Command="{Binding BackCommand}"
+                        Content="Back"
+                        Padding="15,10" />
+                    <Button
+                        Command="{Binding CheckNowCommand}"
+                        Content="Check now"
+                        IsEnabled="{Binding IsEnabled}"
+                        Padding="15,10" />
+                </StackPanel>
+
+                <StackPanel
+                    Grid.ColumnSpan="2"
+                    Grid.Row="1"
+                    Margin="0,12,0,0"
+                    Orientation="Horizontal"
+                    Spacing="10">
+                    <TextBlock
+                        FontWeight="SemiBold"
+                        Foreground="#2D5A2D"
+                        IsVisible="{Binding IsEnabled}"
+                        Text="Observation is on"
+                        VerticalAlignment="Center" />
+                    <TextBlock
+                        FontWeight="SemiBold"
+                        Foreground="#888888"
+                        IsVisible="{Binding !IsEnabled}"
+                        Text="Observation is off"
+                        VerticalAlignment="Center" />
+                    <Button
+                        Command="{Binding EnableCommand}"
+                        Content="Turn on..."
+                        IsVisible="{Binding !IsEnabled}"
+                        Padding="15,10" />
+                    <Button
+                        Command="{Binding DisableCommand}"
+                        Content="Turn off"
+                        IsVisible="{Binding IsEnabled}"
+                        Padding="15,10" />
+                    <Button
+                        Background="Transparent"
+                        BorderBrush="#CCCCCC"
+                        BorderThickness="1"
+                        Command="{Binding ClearDataCommand}"
+                        Content="Delete all observation data..."
+                        Foreground="#DC143C"
+                        Padding="15,10" />
+                </StackPanel>
+
+                <TextBlock
+                    FontSize="11"
+                    Foreground="#888888"
+                    Grid.ColumnSpan="2"
+                    Grid.Row="2"
+                    Margin="0,8,0,0"
+                    Text="{Binding StorageText}"
+                    TextWrapping="Wrap" />
+            </Grid>
+        </Border>
+
+        <!--  Status line (what the last action did)  -->
+        <Border
+            Background="#FFF9E6"
+            BorderBrush="#FFD700"
+            BorderThickness="0,0,0,1"
+            Grid.Row="1"
+            IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+            Padding="20,10">
+            <TextBlock
+                FontSize="12"
+                Foreground="#555555"
+                Text="{Binding StatusMessage}"
+                TextWrapping="Wrap" />
+        </Border>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel
+                Margin="20"
+                Orientation="Vertical"
+                Spacing="15">
+
+                <!--  Background check-in (optional, opt-in)  -->
+                <Border
+                    Background="White"
+                    BorderBrush="#E0E0E0"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="15">
+                    <StackPanel Orientation="Vertical" Spacing="8">
+                        <TextBlock
+                            FontSize="13"
+                            FontWeight="SemiBold"
+                            Foreground="#333333"
+                            Text="Check-ins" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="#666666"
+                            Text="{Binding LastRunText}"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="#666666"
+                            Text="{Binding SchedulerText}"
+                            TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Button
+                                Command="{Binding InstallScheduleCommand}"
+                                Content="Add a daily check-in..."
+                                IsEnabled="{Binding !IsSchedulerInstalled}"
+                                IsVisible="{Binding IsSchedulerSupported}"
+                                Padding="15,8" />
+                            <Button
+                                Command="{Binding RemoveScheduleCommand}"
+                                Content="Remove the daily check-in"
+                                IsVisible="{Binding IsSchedulerInstalled}"
+                                Padding="15,8" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!--  Empty state  -->
+                <Border
+                    Background="#FAFAFA"
+                    IsVisible="{Binding !HasRows}"
+                    Padding="40">
+                    <StackPanel
+                        HorizontalAlignment="Center"
+                        Orientation="Vertical"
+                        Spacing="12">
+                        <TextBlock
+                            FontSize="16"
+                            FontWeight="SemiBold"
+                            Foreground="#333333"
+                            HorizontalAlignment="Center"
+                            Text="Nothing is being watched" />
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="#666666"
+                            HorizontalAlignment="Center"
+                            Text="Turn observation on, then run Smart Select: the folders it suggests watching appear on a 'Watch' button next to it."
+                            TextAlignment="Center"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!--  The watched folders  -->
+                <ItemsControl IsVisible="{Binding HasRows}" ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Vertical" Spacing="10" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border
+                                Background="White"
+                                BorderBrush="#E0E0E0"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="15">
+                                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                                    <StackPanel
+                                        Grid.Column="0"
+                                        Grid.Row="0"
+                                        Orientation="Horizontal"
+                                        Spacing="10">
+                                        <TextBlock
+                                            FontSize="14"
+                                            FontWeight="SemiBold"
+                                            Foreground="#333333"
+                                            Text="{Binding Name}" />
+                                        <TextBlock
+                                            FontSize="12"
+                                            Foreground="#888888"
+                                            Text="{Binding ClassText}"
+                                            VerticalAlignment="Center" />
+                                        <TextBlock
+                                            FontSize="12"
+                                            Foreground="#888888"
+                                            Text="{Binding SizeText}"
+                                            VerticalAlignment="Center" />
+                                    </StackPanel>
+
+                                    <TextBlock
+                                        FontSize="10"
+                                        Foreground="#999999"
+                                        Grid.Column="0"
+                                        Grid.Row="1"
+                                        Text="{Binding DisplayPath}"
+                                        ToolTip.Tip="{Binding FullPath}" />
+
+                                    <TextBlock
+                                        FontSize="12"
+                                        FontWeight="SemiBold"
+                                        Foreground="{Binding StateColor}"
+                                        Grid.Column="0"
+                                        Grid.Row="2"
+                                        Margin="0,8,0,0"
+                                        Text="{Binding StateText}"
+                                        TextWrapping="Wrap" />
+
+                                    <ProgressBar
+                                        Background="#E0E0E0"
+                                        Foreground="#4A90E2"
+                                        Grid.Column="0"
+                                        Grid.Row="3"
+                                        Height="6"
+                                        IsVisible="{Binding ShowProgress}"
+                                        Margin="0,4,0,0"
+                                        Maximum="100"
+                                        Value="{Binding ProgressPercent}" />
+
+                                    <StackPanel
+                                        Grid.Column="0"
+                                        Grid.Row="4"
+                                        Margin="0,8,0,0"
+                                        Orientation="Vertical"
+                                        Spacing="2">
+                                        <TextBlock
+                                            FontSize="11"
+                                            Foreground="#666666"
+                                            Text="{Binding LastActivityText}"
+                                            TextWrapping="Wrap" />
+                                        <TextBlock
+                                            FontSize="11"
+                                            Foreground="#2D5A2D"
+                                            Text="{Binding VerdictText}"
+                                            ToolTip.Tip="{Binding VerdictDetails}" />
+                                        <TextBlock
+                                            FontSize="10"
+                                            Foreground="#999999"
+                                            Text="{Binding LastCheckInText}" />
+                                    </StackPanel>
+
+                                    <StackPanel
+                                        Grid.Column="1"
+                                        Grid.Row="0"
+                                        Grid.RowSpan="5"
+                                        Margin="15,0,0,0"
+                                        Orientation="Vertical"
+                                        Spacing="6"
+                                        VerticalAlignment="Top">
+                                        <Button
+                                            Command="{Binding $parent[ItemsControl].DataContext.PinCommand}"
+                                            CommandParameter="{Binding}"
+                                            Content="{Binding PinButtonText}"
+                                            HorizontalAlignment="Stretch"
+                                            Padding="12,6" />
+                                        <Button
+                                            Command="{Binding $parent[ItemsControl].DataContext.SnoozeCommand}"
+                                            CommandParameter="{Binding}"
+                                            Content="Snooze 30 days"
+                                            HorizontalAlignment="Stretch"
+                                            IsVisible="{Binding CanSnooze}"
+                                            Padding="12,6" />
+                                        <Button
+                                            Command="{Binding $parent[ItemsControl].DataContext.ReassessCommand}"
+                                            CommandParameter="{Binding}"
+                                            Content="Reassess now"
+                                            HorizontalAlignment="Stretch"
+                                            IsVisible="{Binding CanReassess}"
+                                            Padding="12,6" />
+                                        <Button
+                                            Command="{Binding $parent[ItemsControl].DataContext.ReenrollCommand}"
+                                            CommandParameter="{Binding}"
+                                            Content="Watch again"
+                                            HorizontalAlignment="Stretch"
+                                            IsVisible="{Binding CanReenroll}"
+                                            Padding="12,6" />
+                                        <Button
+                                            Command="{Binding $parent[ItemsControl].DataContext.OpenInExplorerCommand}"
+                                            CommandParameter="{Binding}"
+                                            Content="Open in Explorer"
+                                            HorizontalAlignment="Stretch"
+                                            Padding="12,6" />
+                                        <Button
+                                            Command="{Binding $parent[ItemsControl].DataContext.StopWatchingCommand}"
+                                            CommandParameter="{Binding}"
+                                            Content="Stop watching"
+                                            Foreground="#DC143C"
+                                            HorizontalAlignment="Stretch"
+                                            IsVisible="{Binding CanStop}"
+                                            Padding="12,6" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

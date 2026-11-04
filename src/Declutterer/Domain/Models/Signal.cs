@@ -22,6 +22,8 @@ public enum EvidenceGroup
     Structure,
     /// <summary>How complete the inspection was.</summary>
     Coverage,
+    /// <summary>What watching the item over time showed (in use / unused / inconclusive).</summary>
+    Observation,
 }
 
 /// <summary>
@@ -36,13 +38,19 @@ public enum EvidenceGroup
 /// <param name="Risk">Heuristic 0..1 estimate of deletion harm contributed by this signal.</param>
 /// <param name="Detail">Human readable specifics (what exactly matched).</param>
 /// <param name="HardKeep">Veto: the item must never be auto-selected regardless of any other evidence.</param>
+/// <param name="RiskRelief">
+/// Only set by completed quiet observation: the share (0..1) of the "this is merely stale" risk of other signals it may remove.
+/// The combiner applies it solely to OrphanedAppData, ProjectRoot, RecentlyOpened and RecentlyModified, caps it, and never applies it
+/// next to a veto, cloud sync or user documents.
+/// </param>
 public readonly record struct Signal(
     ReasonCode Code,
     EvidenceGroup Group,
     double JunkLlr,
     double Risk,
     string Detail,
-    bool HardKeep = false)
+    bool HardKeep = false,
+    double RiskRelief = 0)
 {
     public bool IsDisposableEvidence => JunkLlr > 0;
 }
