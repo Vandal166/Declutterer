@@ -52,8 +52,11 @@ public sealed class ObservationCandidateDiscoveryService
         List<NodeSnapshot> discovered;
         try
         {
+            // ConfigureAwait(false) on purpose: everything after the first await (the engine run, the per-folder stale-keep safety walks
+            // and the nomination) must stay on the thread pool. Without it the continuation resumes on the UI thread and the unbounded
+            // safety walks below freeze the window (no progress updates, and the Cancel button can not be processed).
             discovered = await Task.Run(() => WalkRoots(roots, filter, includeHidden, analysisOptions, coverage, progress, cancellationToken),
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -72,7 +75,8 @@ public sealed class ObservationCandidateDiscoveryService
             progress?.Report(new SmartCleanupProgress("Assessing discovered folders", 0, coverage.FoldersExamined));
             var engineProgress = progress is null ? null : new Progress<AnalysisProgress>(p =>
                 progress.Report(new SmartCleanupProgress(p.Stage, p.Done, p.Total, IsObservationDiscovery: true)));
-            analysis = await _engine.AnalyzeAsync(discovered, machine, discoveryOptions, engineProgress, cancellationToken, session);
+            analysis = await _engine.AnalyzeAsync(discovered, machine, discoveryOptions, engineProgress, cancellationToken, session)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
