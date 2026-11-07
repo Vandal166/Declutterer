@@ -74,6 +74,10 @@ public sealed class ScanFilterBuilder
     /// </summary>
     public Func<FileSystemInfoWrapper, bool> Build()
     {
-        return entry => _criteria.All(criterion => criterion(entry));
+        // The returned filter must not close over the live list: the builder is a singleton that CreateFilter clears and refills for
+        // the next caller (a lazily expanded folder, Alt+click expansion, Smart Select deepening, watch discovery), possibly while
+        // this filter is still running on another thread. A snapshot keeps every filter's criteria fixed for its whole lifetime.
+        var snapshot = _criteria.ToArray();
+        return entry => snapshot.All(criterion => criterion(entry));
     }
 }

@@ -6,6 +6,7 @@ namespace Declutterer.Domain.Services.Scanning;
 public sealed class ScanFilterService
 {
     private readonly ScanFilterBuilder _filterBuilder;
+    private readonly object _gate = new(); // the builder is shared (singleton) and not thread safe
 
     public ScanFilterService(ScanFilterBuilder filterBuilder)
     {
@@ -22,6 +23,12 @@ public sealed class ScanFilterService
         if(options is null)
             return null; // No filter if options are null
 
+        lock (_gate)
+            return CreateFilterCore(options);
+    }
+
+    private Func<FileSystemInfoWrapper, bool> CreateFilterCore(ScanOptions options)
+    {
         _filterBuilder.Clear();
         
         if (options.AgeFilter is { UseModifiedDate: true, ModifiedBefore: not null })

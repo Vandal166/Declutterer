@@ -1,5 +1,6 @@
 using Declutterer.Domain.Models;
 using Declutterer.Domain.Services.Scanning;
+using Declutterer.Tests.Helpers;
 
 namespace Declutterer.Tests.Services;
 
@@ -322,5 +323,50 @@ public class ScanFilterServiceTests
 
         Assert.NotNull(filter);
         // The actual conversion happens internally - we're just verifying the filter is created
+    }
+
+    [Fact]
+    public void CreateFilter_AFilterKeepsItsCriteria_WhenALaterCallRebuildsTheSharedBuilder()
+    {
+        // The builder is a singleton in the app and every CreateFilter call clears and refills it. A filter that is still in use
+        // (watch discovery, a parallel expansion) must not change under its feet when another caller creates its own filter.
+        using var temp = new TempTestDirectory();
+        var recent = new DirectoryInfo(temp.CreateSubDirectory("recent"));
+        recent.LastWriteTimeUtc = DateTime.UtcNow;
+        var strict = _service.CreateFilter(new ScanOptions
+        {
+            AgeFilter = new AgeFilter { UseModifiedDate = true, ModifiedBefore = DateTime.UtcNow.AddMonths(-3) }
+        })!;
+        Assert.False(strict(new FileSystemInfoWrapper { Info = recent })); // modified today: does not pass "older than 3 months"
+
+        _service.CreateFilter(new ScanOptions()); // no criteria: used to empty the list the first filter was still reading
+
+        Assert.False(strict(new FileSystemInfoWrapper { Info = recent }));
+    }
+
+    [Fact]
+    public async Task CreateFilter_ConcurrentCallsNeverThrow_AndEveryFilterKeepsItsOwnCriteria()
+    {
+        using var temp = new TempTestDirectory();
+        var recent = new DirectoryInfo(temp.CreateSubDirectory("recent"));
+        recent.LastWriteTimeUtc = DateTime.UtcNow;
+        var strictOptions = new ScanOptions
+        {
+            AgeFilter = new AgeFilter { UseModifiedDate = true, ModifiedBefore = DateTime.UtcNow.AddMonths(-3) }
+        };
+        var looseOptions = new ScanOptions();
+
+        var tasks = Enumerable.Range(0, 8).Select(worker => Task.Run(() =>
+        {
+            var wrapper = new FileSystemInfoWrapper { Info = recent };
+            for (int i = 0; i < 2000; i++)
+            {
+                var strict = _service.CreateFilter(strictOptions)!;
+                _service.CreateFilter(worker % 2 == 0 ? looseOptions : strictOptions);
+                Assert.False(strict(wrapper));
+            }
+        })).ToArray();
+
+        await Task.WhenAll(tasks);
     }
 }
