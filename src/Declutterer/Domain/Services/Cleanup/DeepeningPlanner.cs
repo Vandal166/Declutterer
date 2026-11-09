@@ -26,6 +26,7 @@ public static class DeepeningPlanner
         ReasonCode.SystemProtected,
         ReasonCode.SensitiveLocation,
         ReasonCode.UserSettingsOrSaves,
+        ReasonCode.PinnedByUser, // the user said "keep it": do not even look inside
     };
 
     // Folders that host regenerable output as direct children (node_modules, bin/obj, target ...) are the best places to

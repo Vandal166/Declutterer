@@ -447,6 +447,12 @@ public sealed class JunkAssessmentEngine
         foreach (var rule in _rules)
             rule.Evaluate(ctx, sink);
 
+        // A pin / snooze protects the folder it was set on (ObservationRule) - and must not be undone by selecting a folder ABOVE it,
+        // which includes the case where the pinned folder is not loaded in the tree at all.
+        if (node.IsDirectory && observations?.ContainsKeptPath(node.Path) == true)
+            sink.Add(ReasonCode.ContainsKeptFolder, EvidenceGroup.Observation, -5.0, 0.9,
+                "a folder inside it is pinned or snoozed in the Watchlist: selecting this one would delete it too", hardKeep: true);
+
         var list = sink.Signals.ToList();
         return (ctx, list, combiner.Combine(ctx, list));
     }

@@ -172,4 +172,27 @@ public class SmartCleanupSelectorTests
         Assert.Equal(DateTimeKind.Utc, snap.Children[0].LastWriteUtc!.Value.Kind);
         Assert.Equal(new DateTime(2024, 1, 1, 12, 0, 0, DateTimeKind.Utc), snap.LastWriteUtc);
     }
+
+    [Fact]
+    public void NothingInsideAPinnedFolder_IsTaken_ButItsSiblingsAre()
+    {
+        var root = Node("root", null);
+        var pinned = Node("pinned", root);
+        var insidePinned = Node("cache", pinned);
+        var sibling = Node("cache2", root);
+        var map = new Dictionary<NodeSnapshot, JunkAssessment>
+        {
+            [pinned] = new()
+            {
+                JunkScore = 0.05, DeletionRisk = 0.95, Confidence = 0.9, Tier = CleanupTier.Keep,
+                Reasons = new[] { new Signal(ReasonCode.PinnedByUser, EvidenceGroup.Observation, -5, 0.9, "kept", true) },
+            },
+            [insidePinned] = A(CleanupTier.Safe),
+            [sibling] = A(CleanupTier.Safe),
+        };
+
+        var plan = new SmartCleanupSelector().Plan(new[] { root }, map, SmartSelectMode.Conservative, Options);
+
+        Assert.Equal(new[] { sibling }, plan.Selected);
+    }
 }

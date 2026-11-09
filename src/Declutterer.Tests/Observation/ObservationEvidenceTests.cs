@@ -202,7 +202,7 @@ public class ObservationEvidenceTests
     [Fact]
     public void TheNewReasonCodes_HaveTitles()
     {
-        foreach (var code in new[] { ReasonCode.ObservedActive, ReasonCode.ObservedInactive, ReasonCode.ObservationInconclusive, ReasonCode.ObservedMoved, ReasonCode.PinnedByUser })
+        foreach (var code in new[] { ReasonCode.ObservedActive, ReasonCode.ObservedInactive, ReasonCode.ObservationInconclusive, ReasonCode.ObservedMoved, ReasonCode.PinnedByUser, ReasonCode.ContainsKeptFolder })
             Assert.NotEqual(code.ToString(), code.ToTitle());
     }
 }

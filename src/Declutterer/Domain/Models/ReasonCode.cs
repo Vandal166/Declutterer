@@ -55,6 +55,8 @@ public enum ReasonCode
     ObservedMoved,
     /// <summary>The user pinned or snoozed it: never suggested for deletion.</summary>
     PinnedByUser,
+    /// <summary>A folder below this one is pinned or snoozed in the Watchlist: deleting this one would delete it too.</summary>
+    ContainsKeptFolder,
 }
 
 public static class ReasonCodeExtensions
@@ -101,6 +103,7 @@ public static class ReasonCodeExtensions
         ReasonCode.ObservationInconclusive => "Observation inconclusive",
         ReasonCode.ObservedMoved => "Observed moved or renamed",
         ReasonCode.PinnedByUser => "Kept by you",
+        ReasonCode.ContainsKeptFolder => "Contains a folder you kept",
         _ => code.ToString()
     };
 }

@@ -237,4 +237,62 @@ public class ObservationEngineScenarioTests : IDisposable
         Assert.NotNull(r.Analysis.Facts);
         Assert.Contains(r.Analysis.Facts!, kv => kv.Key.Path.EndsWith("OldTool") && kv.Value.IsComplete);
     }
+
+    [Fact]
+    public void AFolderAboveAPinnedOne_IsAHardKeep_AndNothingInsideThePinnedOneIsSelected()
+    {
+        _s.File("AppData/Roaming/Suite/tool/settings.json", 800, 3000);
+        _s.File("AppData/Roaming/Suite/tool/cache/old.tmp", 800, 2000); // junk by itself
+        _s.File("AppData/Roaming/Suite/other/settings.json", 800, 3000);
+        const string cache = "AppData/Roaming/Suite/tool/cache";
+
+        // control: without the pin the cache inside the app folder is offered
+        Assert.Contains(cache, Run().Selected(SmartSelectMode.Balanced));
+
+        var r = Run(Entry("AppData/Roaming/Suite/tool", e => e with { Pinned = true, State = WatchState.Resolved, Resolution = WatchResolution.Pinned }));
+
+        Assert.True(r["AppData/Roaming/Suite/tool"].HasHardKeep, r.Explain("AppData/Roaming/Suite/tool"));
+        Assert.True(r.Has("AppData/Roaming/Suite", ReasonCode.ContainsKeptFolder), r.Explain("AppData/Roaming/Suite"));
+        Assert.True(r["AppData/Roaming/Suite"].HasHardKeep);
+        foreach (var mode in new[] { SmartSelectMode.Conservative, SmartSelectMode.Balanced, SmartSelectMode.Aggressive })
+        {
+            var selected = r.Selected(mode);
+            Assert.DoesNotContain("AppData/Roaming/Suite", selected);
+            Assert.DoesNotContain(selected, p => p.StartsWith("AppData/Roaming/Suite/tool", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void AFolderAboveASnoozedOne_IsAHardKeep_ButOnlyWhileTheSnoozeRuns()
+    {
+        _s.File("AppData/Roaming/Suite/tool/settings.json", 800, 3000);
+        _s.File("AppData/Roaming/Suite/tool/session.dat", 800, 9000);
+
+        var snoozed = Run(Entry("AppData/Roaming/Suite/tool", e => QuietEligible(e) with { SnoozeUntilUtc = DateTime.UtcNow.AddDays(5) }));
+        var lapsed = Run(Entry("AppData/Roaming/Suite/tool", e => QuietEligible(e) with { SnoozeUntilUtc = DateTime.UtcNow.AddDays(-1) }));
+
+        Assert.True(snoozed.Has("AppData/Roaming/Suite", ReasonCode.ContainsKeptFolder));
+        Assert.False(lapsed.Has("AppData/Roaming/Suite", ReasonCode.ContainsKeptFolder));
+    }
+
+    [Fact]
+    public void TheLookup_KnowsWhichFoldersContainAKeptOne()
+    {
+        var now = DateTime.UtcNow;
+        var lookup = new ObservationLookup(new[]
+        {
+            ObservationTestKit.Entry("/data/apps/pinned", now) with { State = WatchState.Resolved, Pinned = true, Resolution = WatchResolution.Pinned },
+            ObservationTestKit.Entry("/data/snoozed/tool", now) with { SnoozeUntilUtc = now.AddDays(3) },
+            ObservationTestKit.Entry("/data/lapsed/tool", now) with { SnoozeUntilUtc = now.AddDays(-3) },
+            ObservationTestKit.Entry("/data/plain/watched", now),
+        }, now);
+
+        Assert.True(lookup.ContainsKeptPath("/data/apps"));
+        Assert.True(lookup.ContainsKeptPath("/DATA"));
+        Assert.True(lookup.ContainsKeptPath("/data/snoozed"));
+        Assert.False(lookup.ContainsKeptPath("/data/apps/pinned"));   // not strictly below itself (the rule for the item handles that)
+        Assert.False(lookup.ContainsKeptPath("/data/lapsed"));        // the snooze is over
+        Assert.False(lookup.ContainsKeptPath("/data/plain"));         // only a plain watch below it
+        Assert.False(lookup.ContainsKeptPath("/data/appsuite"));      // a name prefix is not an ancestor
+    }
 }

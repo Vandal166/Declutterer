@@ -107,4 +107,14 @@ public class DeepeningPlannerTests
         Assert.Equal(3, targets.Count);
         Assert.DoesNotContain(deeper, targets); // depth 3 > DeepenMaxDepth 2
     }
+
+    [Fact]
+    public void AFolderThePinnedByTheUser_IsNotOpened()
+    {
+        var root = Dir("root", null, unloaded: false);
+        var pinned = Dir("pinned", root);
+        var map = new Dictionary<NodeSnapshot, JunkAssessment> { [pinned] = A(CleanupTier.Keep, Hard(ReasonCode.PinnedByUser)) };
+
+        Assert.Empty(DeepeningPlanner.SelectTargets(new[] { root }, map, Options));
+    }
 }

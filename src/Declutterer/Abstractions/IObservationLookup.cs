@@ -14,6 +14,12 @@ public interface IObservationLookup
     /// <summary>True if the path equals, lies inside or contains a watched / pinned / snoozed / unobservable path.</summary>
     bool OverlapsExisting(string path);
 
+    /// <summary>
+    /// True if a pinned folder, or one that is snoozed right now, lies strictly below this path. Such a folder must never be selected
+    /// as a whole: that would delete what the user asked to keep.
+    /// </summary>
+    bool ContainsKeptPath(string path);
+
     /// <summary>Entries that are checked in (Watching, Alive, QuietEligible). Counts against the watch limit.</summary>
     int ActiveCount { get; }
 }

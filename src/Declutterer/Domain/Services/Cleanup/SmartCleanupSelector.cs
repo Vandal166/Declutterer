@@ -60,6 +60,10 @@ public sealed class SmartCleanupSelector
 
         void Visit(NodeSnapshot n)
         {
+            // "Kept by you": a pinned or snoozed folder is off limits as a whole, so nothing inside it is suggested either.
+            if (assessments.TryGetValue(n, out var kept) && kept.Reasons.Any(r => r.Code == ReasonCode.PinnedByUser))
+                return;
+
             if (!n.IsRoot && assessments.TryGetValue(n, out var a) && IsEligible(a, mode, options) && !ContainsVeto(n))
             {
                 selected.Add(n);
