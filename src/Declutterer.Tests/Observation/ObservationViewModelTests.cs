@@ -293,6 +293,20 @@ public class ObservationViewModelTests
     }
 
     [Fact]
+    public async Task ASchedulerThatCanNotWriteItsFiles_IsReported_NotThrown()
+    {
+        _scheduler.Throws = new UnauthorizedAccessException("read-only home folder");
+        var vm = Watchlist();
+
+        await vm.InstallScheduleCommand.ExecuteAsync(null);
+        Assert.Contains("read-only home folder", vm.StatusMessage);
+
+        vm.StatusMessage = string.Empty;
+        await vm.RemoveScheduleCommand.ExecuteAsync(null);
+        Assert.Contains("read-only home folder", vm.StatusMessage);
+    }
+
+    [Fact]
     public async Task AnUnsupportedPlatform_OffersNoSchedule()
     {
         _scheduler.IsSupported = false;
@@ -485,6 +499,23 @@ public class ObservationViewModelTests
 
         Assert.DoesNotContain("enroll", _coordinator.Calls);
         Assert.True(vm.HasObservationCandidates);
+    }
+
+    [Fact]
+    public async Task WithoutAWayToAsk_NothingIsEnrolled()
+    {
+        var smart = new ScriptedSmartCleanup();
+        var vm = new MainWindowViewModel(Substitute.For<INavigationService>(), Substitute.For<IScanWorkflowService>(), Substitute.For<ITreeNavigationService>(),
+            Substitute.For<IContextMenuService>(), Substitute.For<ICommandService>(), Substitute.For<IClipboardService>(),
+            Substitute.For<ISelectionManagementService>(), new HistoryWindowViewModel(), smart, _coordinator, Watchlist(), null);
+        vm.Roots.Add(new TreeNode { Name = "Root", FullPath = "/root" });
+        smart.Result = smart.Result with { ObservationCandidates = new[] { Candidate("a", 100) } };
+        await vm.SmartSelectCommand.ExecuteAsync(null);
+
+        await vm.EnrollObservationCandidatesCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain("enroll", _coordinator.Calls);
+        Assert.True(vm.HasObservationCandidates); // still on offer
     }
 
     [Fact]

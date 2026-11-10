@@ -126,7 +126,7 @@ public sealed class ObservationCheckInService
                             Interlocked.Increment(ref inconclusive);
                     }).ConfigureAwait(false);
 
-                reassessed = await ReassessAsync(becameQuiet, cancellationToken).ConfigureAwait(false);
+                reassessed = await ReassessAsync(becameQuiet, owner, cancellationToken).ConfigureAwait(false);
             }
 
             await _ledger.PurgeAsync(started, _options, cancellationToken).ConfigureAwait(false);
@@ -218,7 +218,7 @@ public sealed class ObservationCheckInService
             ? $"{{\"created\":{changes.Created},\"modified\":{changes.Modified},\"deleted\":{changes.Deleted}}}"
             : null;
 
-    private async Task<int> ReassessAsync(List<long> ids, CancellationToken ct)
+    private async Task<int> ReassessAsync(List<long> ids, string owner, CancellationToken ct)
     {
         if (_reassessor is null || ids.Count == 0)
             return 0;
@@ -227,6 +227,16 @@ public sealed class ObservationCheckInService
         foreach (var id in ids.Take(_options.MaxReassessmentsPerRun))
         {
             ct.ThrowIfCancellationRequested();
+
+            // A reassessment runs the whole engine (several time budgets), and the per-item budget of the main loop does not cover it:
+            // ten of them can outlast the lock's TTL, which would let a second check-in (the scheduled one) start in parallel.
+            // Renew the lock before each one, and stand aside if somebody else has taken it over in the meantime.
+            if (!await _ledger.TryAcquireRunLockAsync(owner, _options.RunLockTtl, _time.GetUtcNow().UtcDateTime, ct).ConfigureAwait(false))
+            {
+                Log.Warning("Observation check-in lost its run lock; the remaining reassessments are left for the next run");
+                break;
+            }
+
             try
             {
                 var fresh = await _ledger.GetAsync(id, ct).ConfigureAwait(false);

@@ -451,7 +451,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable, IContextM
         var candidates = offeredCandidates.ToList();
         var message = ObservationConsentText.BuildEnrollment(candidates.Count, candidates.Sum(c => c.Size), _observationCoordinator.Options,
             candidates.Select(c => c.Class).Distinct().ToArray());
-        if (_confirmationDialogService is not null &&
+        // Fails closed like the Watchlist page does: without a way to ask, nothing is added to the watchlist.
+        if (_confirmationDialogService is null ||
             !await _confirmationDialogService.ShowConfirmationAsync("Watch these folders?", message, "Start watching"))
             return;
 

@@ -553,4 +553,46 @@ public class ObservationCheckInServiceTests : IDisposable
 
         Assert.Equal(1, (await _r.GetAsync(e.Id)).CoveredDays);
     }
+
+    [Fact]
+    public async Task TheReassessmentLoop_StandsAside_WhenAnotherProcessTookOverTheExpiredRunLock()
+    {
+        _r.CreateItem("a");
+        _r.CreateItem("b");
+        await _r.EnrollAsync("a", requiredDays: 1);
+        await _r.EnrollAsync("b", requiredDays: 1);
+        // the first reassessment is so slow that the run lock (5 minutes) expires and the scheduled run takes it over
+        _r.Reassessor.DuringEachCall = async () =>
+        {
+            _r.Time.Advance(TimeSpan.FromMinutes(6));
+            await _r.Ledger.TryAcquireRunLockAsync("headless:9", TimeSpan.FromMinutes(5), _r.Time.UtcNow);
+        };
+
+        var run = await _r.RunAfterDaysAsync(1);
+
+        Assert.Equal(CheckInOutcome.Ok, run.Outcome);
+        Assert.Equal(2, run.QuietEligible);
+        Assert.Equal(1, run.Reassessed);              // the second one was left for the next run, not run in parallel with the other process
+        Assert.Single(_r.Reassessor.Calls);
+    }
+
+    [Fact]
+    public async Task TheReassessmentLoop_RenewsTheRunLock_SoALongRunKeepsOtherProcessesOut()
+    {
+        _r.CreateItem("a");
+        _r.CreateItem("b");
+        await _r.EnrollAsync("a", requiredDays: 1);
+        await _r.EnrollAsync("b", requiredDays: 1);
+        bool otherGotIn = false;
+        _r.Reassessor.DuringEachCall = async () =>
+        {
+            _r.Time.Advance(TimeSpan.FromMinutes(4)); // each one is slow, but the lock is renewed before every one
+            otherGotIn |= await _r.Ledger.TryAcquireRunLockAsync("headless:9", TimeSpan.FromMinutes(5), _r.Time.UtcNow);
+        };
+
+        var run = await _r.RunAfterDaysAsync(1);
+
+        Assert.Equal(2, run.Reassessed);
+        Assert.False(otherGotIn);
+    }
 }

@@ -68,14 +68,19 @@ internal sealed class FakeReassessor : Declutterer.Abstractions.IObservationReas
 {
     public List<long> Calls { get; } = new();
 
-    public Task<ReassessmentResult?> ReassessAsync(WatchEntry entry, CancellationToken cancellationToken = default)
+    /// <summary>Runs inside every reassessment, to simulate it taking a long time (or something happening while it runs).</summary>
+    public Func<Task>? DuringEachCall { get; set; }
+
+    public async Task<ReassessmentResult?> ReassessAsync(WatchEntry entry, CancellationToken cancellationToken = default)
     {
         Calls.Add(entry.Id);
         var assessment = new JunkAssessment
         {
             JunkScore = 0.8, DeletionRisk = 0.1, Confidence = 0.7, Tier = CleanupTier.Likely, Reasons = Array.Empty<Signal>(),
         };
-        return Task.FromResult<ReassessmentResult?>(new ReassessmentResult(CleanupTier.Likely, 0.8, 0.1, "fake", assessment));
+        if (DuringEachCall is not null)
+            await DuringEachCall();
+        return new ReassessmentResult(CleanupTier.Likely, 0.8, 0.1, "fake", assessment);
     }
 }
 
@@ -282,9 +287,10 @@ internal sealed class FakeScheduler : Declutterer.Abstractions.IObservationSched
     public bool Installed { get; set; }
     public List<string> Calls { get; } = new();
     public Declutterer.Abstractions.ScheduleOperationResult InstallResult { get; set; } = new(true, "installed");
+    public Exception? Throws { get; set; }
 
     public Declutterer.Abstractions.ScheduleDescription Describe() => new("fake scheduler", "A daily thing.", "\"/x/Declutterer\" --observe", new[] { "Runs as you.", "Metadata only." });
     public Task<Declutterer.Abstractions.ScheduleStatus> GetStatusAsync(CancellationToken ct = default) => Task.FromResult(new Declutterer.Abstractions.ScheduleStatus(Installed, null));
-    public Task<Declutterer.Abstractions.ScheduleOperationResult> InstallAsync(CancellationToken ct = default) { Calls.Add("install"); Installed = InstallResult.Success; return Task.FromResult(InstallResult); }
-    public Task<Declutterer.Abstractions.ScheduleOperationResult> UninstallAsync(CancellationToken ct = default) { Calls.Add("uninstall"); Installed = false; return Task.FromResult(new Declutterer.Abstractions.ScheduleOperationResult(true, "removed")); }
+    public Task<Declutterer.Abstractions.ScheduleOperationResult> InstallAsync(CancellationToken ct = default) { Calls.Add("install"); if (Throws is not null) throw Throws; Installed = InstallResult.Success; return Task.FromResult(InstallResult); }
+    public Task<Declutterer.Abstractions.ScheduleOperationResult> UninstallAsync(CancellationToken ct = default) { Calls.Add("uninstall"); if (Throws is not null) throw Throws; Installed = false; return Task.FromResult(new Declutterer.Abstractions.ScheduleOperationResult(true, "removed")); }
 }

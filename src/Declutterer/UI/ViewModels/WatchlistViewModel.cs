@@ -338,8 +338,17 @@ public sealed partial class WatchlistViewModel : ViewModelBase
         if (!agreed)
             return;
 
-        var result = await _scheduler.InstallAsync();
-        StatusMessage = result.Message;
+        // An exception escaping an async relay command is rethrown on the UI context and ends the program: report it instead.
+        try
+        {
+            var result = await _scheduler.InstallAsync();
+            StatusMessage = result.Message;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log.Error(ex, "Adding the daily observation check-in failed");
+            StatusMessage = "The daily check-in could not be added: " + ex.Message;
+        }
         await LoadAsync();
     }
 
@@ -349,8 +358,16 @@ public sealed partial class WatchlistViewModel : ViewModelBase
         if (_scheduler is null)
             return;
 
-        var result = await _scheduler.UninstallAsync();
-        StatusMessage = result.Message;
+        try
+        {
+            var result = await _scheduler.UninstallAsync();
+            StatusMessage = result.Message;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log.Error(ex, "Removing the daily observation check-in failed");
+            StatusMessage = "The daily check-in could not be removed: " + ex.Message;
+        }
         await LoadAsync();
     }
 }
