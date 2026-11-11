@@ -312,4 +312,21 @@ public class FingerprintTests : IDisposable
         Assert.Null(Fingerprint.FromJson(null));
         Assert.Empty(back.AccessSamples); // samples are never persisted
     }
+
+    [Fact]
+    public void TheFirstLevelEntries_AreKeyedByAHashOfTheirName_SoNoFileNamesArePersisted()
+    {
+        _t.CreateFile("TaxReturn2019/a.dat", 10);
+        _t.CreateFile("passwords.txt", 10);
+        Settle();
+
+        var fp = Walk();
+        var json = fp.ToJson();
+
+        Assert.Equal(2, fp.Children.Count);
+        Assert.DoesNotContain("TaxReturn2019", json);
+        Assert.DoesNotContain("passwords", json);
+        Assert.All(fp.Children.Keys, k => Assert.Matches("^[0-9a-f]{16}$", k));
+        Assert.Equal(fp.Children.Keys.OrderBy(k => k), Walk().Children.Keys.OrderBy(k => k)); // stable between walks
+    }
 }

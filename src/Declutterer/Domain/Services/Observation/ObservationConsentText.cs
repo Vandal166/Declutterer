@@ -11,12 +11,12 @@ public static class ObservationConsentText
         "Declutterer can watch suspicious or stale folders for a few weeks and use observed activity as evidence for Smart Select.\n" +
         "\n" +
         $"What is stored (only on this computer, in {ledgerPath}):\n" +
-        "  • each watched folder's path, size and a fingerprint of its file names, sizes and modified dates\n" +
+        "  • each watched folder's path, size and a fingerprint of its entries' names, sizes and modified dates (hashes: the names of your files and folders themselves are not stored)\n" +
         "  • for every check: the result, and how many entries were added, changed or removed\n" +
         "  • the days on which this computer was in use\n" +
         "It never reads file contents and never records which files you open.\n" +
         "\n" +
-        $"How long: finished items are forgotten after {options.ResolvedRetentionDays} days and check records after {options.CheckInRetentionDays} days. " +
+        $"How long: finished items are forgotten after {options.ResolvedRetentionDays} days and check records after {options.CheckInRetentionDays} days; the days this computer was in use and the times Declutterer itself read the disk after {options.HeartbeatRetentionDays} days. " +
         "You can delete everything at once in the Watchlist.\n" +
         "\n" +
         "Nothing is deleted because of this. It only changes what Smart Select suggests, and you still confirm every deletion.";

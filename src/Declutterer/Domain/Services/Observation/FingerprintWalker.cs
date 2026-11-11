@@ -220,7 +220,7 @@ public sealed class FingerprintWalker
                 }
 
                 if (depth == 0 && own is not null && !st.Truncated)
-                    st.Children[entry.Name] = Hex(own.GetHashAndReset()).Substring(0, 16);
+                    st.Children[NameKey(entry.Name)] = Hex(own.GetHashAndReset()).Substring(0, 16);
             }
             finally
             {
@@ -324,6 +324,13 @@ public sealed class FingerprintWalker
         buffer[p] = (byte)'\n';
         return buffer;
     }
+
+    /// <summary>
+    /// The key of a first-level entry in <see cref="Fingerprint.Children"/>. The fingerprint is persisted, and the ledger stores paths and
+    /// aggregates only: the keys are only ever compared for equality and counted, so they are a hash of the name, never the name.
+    /// </summary>
+    private static string NameKey(string name) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(name)), 0, 8).ToLowerInvariant();
 
     private static string Hex(byte[] bytes) => Convert.ToHexString(bytes).ToLowerInvariant();
 }

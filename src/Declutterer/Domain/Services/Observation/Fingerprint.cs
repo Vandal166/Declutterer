@@ -21,7 +21,10 @@ public sealed record Fingerprint
     public string SignificantHash { get; init; } = string.Empty;
     public string DroppingHash { get; init; } = string.Empty;
 
-    /// <summary>First-level entry name to a short hash of that entry's whole subtree (capped; see <see cref="ChildrenTruncated"/>).</summary>
+    /// <summary>
+    /// Hash of a first-level entry's name to a short hash of that entry's whole subtree (capped; see <see cref="ChildrenTruncated"/>).
+    /// The names themselves are not kept: this is persisted, and only equality and counts are needed.
+    /// </summary>
     public Dictionary<string, string> Children { get; init; } = new();
     public bool ChildrenTruncated { get; init; }
 

@@ -602,4 +602,17 @@ public class ObservationViewModelTests
         Assert.Contains("Skipped 4: big (too large); gone (no longer exists); c (limit); ...", text);
         Assert.Equal("Nothing was added to the watchlist. Skipped 1: observation is switched off.", MainWindowViewModel.DescribeEnrollment(EnrollmentResult.None("observation is switched off")));
     }
+
+    [Fact]
+    public void TheConsentText_NamesEveryRetentionPeriod_AndSaysNoNamesAreStored()
+    {
+        var options = new ObservationOptions();
+
+        var text = ObservationConsentText.Build(options, "/data/ledger.db");
+
+        Assert.Contains($"{options.ResolvedRetentionDays} days", text);
+        Assert.Contains($"{options.CheckInRetentionDays} days", text);
+        Assert.Contains($"{options.HeartbeatRetentionDays} days", text);
+        Assert.Contains("names of your files and folders themselves are not stored", text);
+    }
 }

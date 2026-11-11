@@ -18,7 +18,7 @@ Only on this computer, in `ledger.db` (SQLite; `%LOCALAPPDATA%\Declutterer\obser
 | `own_activity`                         | intervals in which Declutterer itself was reading the disk (scans, Smart Select, check-ins)                                   |
 | `run_log`, `volume_cursor`, `settings` | the last runs, change-journal cursors (reserved), the on/off switch, the consent and the cross-process run lock               |
 
-A **fingerprint** is a hash over the names, kinds, sizes and last-write times of everything in the folder, plus a short hash per first-level entry. It contains **no file content** and **no per-file access log**: nothing records which files you open.
+A **fingerprint** is a hash over the names, kinds, sizes and last-write times of everything in the folder, plus a short hash per first-level entry (keyed by a hash of the entry's name: **no file or folder names are stored**). It contains **no file content** and **no per-file access log**: nothing records which files you open.
 
 Retention: finished entries are forgotten after 90 days (pinned ones are kept: they are the "never suggest this again" memory), check records after 180 days, heartbeat days and own-activity after 400. **Delete all observation data** on the Watchlist page empties every table in one click (the consent stays).
 
@@ -117,6 +117,7 @@ Only one check-in runs at a time, even across processes (a lock in the ledger th
 9. **A rename is only recognised among the siblings of the old location** (Windows file identity). A move to another folder, and every move on Linux/macOS (path-only identity), reads as _Missing_ – the safe direction.
 10. **The reassessment lives in `ObservationReassessor`** (Domain, no UI dependencies) rather than in `SmartCleanupService`, so the headless run can use it. The machine snapshot it takes is the provider's (the Windows one caches for 60 s).
 11. Covered-days bookkeeping counts check-in days only (and journal days when a journal provider exists). The ledger lives in the _local_ (not roaming) application data folder.
+12. **A pin or snooze protects the neighbourhood, not just the folder.** Only protecting the exact path let Smart Select select a folder *above* a pinned one as a whole (the descendant safety walk and the stage A shortcut know nothing about the ledger, and the pinned folder may not even be loaded in the tree) or pick junk-looking children *inside* it. Every folder that contains a pinned / currently snoozed folder is now a hard keep (`ContainsKeptFolder`, assigned by the engine from `IObservationLookup.ContainsKeptPath`), and the selector and the deepening planner do not look inside a `PinnedByUser` folder. Deleting by hand is unaffected: a pin means "never suggest", not "can not be deleted".
 
 ## Not done / not verified
 
