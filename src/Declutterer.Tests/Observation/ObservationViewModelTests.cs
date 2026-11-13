@@ -613,6 +613,6 @@ public class ObservationViewModelTests
         Assert.Contains($"{options.ResolvedRetentionDays} days", text);
         Assert.Contains($"{options.CheckInRetentionDays} days", text);
         Assert.Contains($"{options.HeartbeatRetentionDays} days", text);
-        Assert.Contains("names of your files and folders themselves are not stored", text);
+        Assert.Contains("common names may be guessed from the hashes", text);
     }
 }

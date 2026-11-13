@@ -78,27 +78,30 @@ public sealed class ObservationCheckInService
         var outcomeKind = CheckInOutcome.Ok;
         string? detail = null;
         var becameQuiet = new List<long>();
+        using var runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        int runLockLost = 0;
+        var lockRenewal = KeepRunLockAliveAsync(owner, runCts, () => Interlocked.Exchange(ref runLockLost, 1));
 
         try
         {
-            await _ledger.RecordHeartbeatAsync(started.Date, ObservationSource.Heartbeat, cancellationToken).ConfigureAwait(false);
-            await RecordVolumeHeartbeatAsync(started, cancellationToken).ConfigureAwait(false);
+            await _ledger.RecordHeartbeatAsync(started.Date, ObservationSource.Heartbeat, runCts.Token).ConfigureAwait(false);
+            await RecordVolumeHeartbeatAsync(started, runCts.Token).ConfigureAwait(false);
 
-            var entries = (await _ledger.ListAsync(WatchListFilter.Active, cancellationToken).ConfigureAwait(false))
+            var entries = (await _ledger.ListAsync(WatchListFilter.Active, runCts.Token).ConfigureAwait(false))
                 .Where(e => e.SnoozeUntilUtc is not { } snooze || snooze <= started)
                 .OrderBy(e => e.LastCheckInUtc ?? DateTime.MinValue) // longest unchecked first: nobody starves
                 .ToList();
 
             if (entries.Count > 0)
             {
-                var machine = await _snapshots.CaptureAsync(cancellationToken).ConfigureAwait(false);
+                var machine = await _snapshots.CaptureAsync(runCts.Token).ConfigureAwait(false);
                 var oldest = entries.Min(e => e.QuietSinceUtc).Date.AddDays(-1);
-                var tracker = new CoverageTracker(await _ledger.GetHeartbeatDaysAsync(oldest, cancellationToken).ConfigureAwait(false));
-                var ownActivity = await _ledger.GetOwnActivityAsync(oldest, cancellationToken).ConfigureAwait(false);
+                var tracker = new CoverageTracker(await _ledger.GetHeartbeatDaysAsync(oldest, runCts.Token).ConfigureAwait(false));
+                var ownActivity = await _ledger.GetOwnActivityAsync(oldest, runCts.Token).ConfigureAwait(false);
                 var runDeadline = started + _options.CheckInTimeBudget;
 
                 await Parallel.ForEachAsync(entries,
-                    new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, _options.CheckInMaxDegreeOfParallelism), CancellationToken = cancellationToken },
+                    new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, _options.CheckInMaxDegreeOfParallelism), CancellationToken = runCts.Token },
                     async (entry, token) =>
                     {
                         if (_time.GetUtcNow().UtcDateTime >= runDeadline)
@@ -126,14 +129,39 @@ public sealed class ObservationCheckInService
                             Interlocked.Increment(ref inconclusive);
                     }).ConfigureAwait(false);
 
-                reassessed = await ReassessAsync(becameQuiet, owner, cancellationToken).ConfigureAwait(false);
+                var reassessment = await ReassessAsync(becameQuiet, owner, runCts.Token).ConfigureAwait(false);
+                reassessed = reassessment.Reassessed;
+                if (!reassessment.LockHeld)
+                {
+                    Interlocked.Exchange(ref runLockLost, 1);
+                    runCts.Cancel();
+                }
             }
 
-            await _ledger.PurgeAsync(started, _options, cancellationToken).ConfigureAwait(false);
+            // Confirm ownership before final ledger writes as well. This closes the edge where a long final reassessment
+            // could outlast the lease and finish before the periodic keeper gets its next turn.
+            if (!await _ledger.TryAcquireRunLockAsync(owner, _options.RunLockTtl, _time.GetUtcNow().UtcDateTime, runCts.Token)
+                    .ConfigureAwait(false))
+            {
+                Log.Warning("Observation check-in lost its run lock before purge; stopping the current run");
+                Interlocked.Exchange(ref runLockLost, 1);
+                runCts.Cancel();
+                runCts.Token.ThrowIfCancellationRequested();
+            }
+
+            await _ledger.PurgeAsync(started, _options, runCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            outcomeKind = CheckInOutcome.Cancelled;
+            if (Volatile.Read(ref runLockLost) != 0)
+            {
+                outcomeKind = CheckInOutcome.Error;
+                detail = "the check-in stopped because it could not retain its run lock";
+            }
+            else
+            {
+                outcomeKind = CheckInOutcome.Cancelled;
+            }
         }
         catch (Exception ex)
         {
@@ -143,6 +171,9 @@ public sealed class ObservationCheckInService
         }
         finally
         {
+            runCts.Cancel();
+            await lockRenewal.ConfigureAwait(false);
+
             var finished = _time.GetUtcNow().UtcDateTime;
             // our own reads must not be mistaken for use by later access-time comparisons
             await _ledger.RecordOwnActivityAsync(started, finished > started ? finished : started.AddSeconds(1), "checkin", CancellationToken.None).ConfigureAwait(false);
@@ -218,10 +249,10 @@ public sealed class ObservationCheckInService
             ? $"{{\"created\":{changes.Created},\"modified\":{changes.Modified},\"deleted\":{changes.Deleted}}}"
             : null;
 
-    private async Task<int> ReassessAsync(List<long> ids, string owner, CancellationToken ct)
+    private async Task<(int Reassessed, bool LockHeld)> ReassessAsync(List<long> ids, string owner, CancellationToken ct)
     {
         if (_reassessor is null || ids.Count == 0)
-            return 0;
+            return (0, true);
 
         int done = 0;
         foreach (var id in ids.Take(_options.MaxReassessmentsPerRun))
@@ -230,11 +261,11 @@ public sealed class ObservationCheckInService
 
             // A reassessment runs the whole engine (several time budgets), and the per-item budget of the main loop does not cover it:
             // ten of them can outlast the lock's TTL, which would let a second check-in (the scheduled one) start in parallel.
-            // Renew the lock before each one, and stand aside if somebody else has taken it over in the meantime.
+            // Reacquire immediately before each one. A background lease keeper renews during a long individual reassessment.
             if (!await _ledger.TryAcquireRunLockAsync(owner, _options.RunLockTtl, _time.GetUtcNow().UtcDateTime, ct).ConfigureAwait(false))
             {
                 Log.Warning("Observation check-in lost its run lock; the remaining reassessments are left for the next run");
-                break;
+                return (done, false);
             }
 
             try
@@ -248,6 +279,37 @@ public sealed class ObservationCheckInService
                 Log.Warning(ex, "Reassessment of watched item {Id} failed", id);
             }
         }
-        return done;
+        return (done, true);
+    }
+
+    /// <summary>Keeps the run lease alive even if one reassessment or filesystem call takes longer than its normal budget.</summary>
+    private async Task KeepRunLockAliveAsync(string owner, CancellationTokenSource runCts, Action onLockLost)
+    {
+        var interval = TimeSpan.FromTicks(Math.Max(1, _options.RunLockTtl.Ticks / 3));
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(interval, runCts.Token).ConfigureAwait(false);
+                if (!await _ledger.TryAcquireRunLockAsync(owner, _options.RunLockTtl, _time.GetUtcNow().UtcDateTime, runCts.Token)
+                        .ConfigureAwait(false))
+                {
+                    Log.Warning("Observation check-in lost its run lock; stopping the current run");
+                    onLockLost();
+                    runCts.Cancel();
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (runCts.IsCancellationRequested)
+        {
+            // Normal shutdown or the caller cancelled the check-in.
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Observation check-in could not renew its run lock; stopping the current run");
+            onLockLost();
+            runCts.Cancel();
+        }
     }
 }

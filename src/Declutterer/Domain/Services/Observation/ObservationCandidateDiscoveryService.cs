@@ -45,6 +45,9 @@ public sealed class ObservationCandidateDiscoveryService
         IObservationLookup? existing, IEnumerable<string> selectedPaths, IProgress<SmartCleanupProgress>? progress,
         CancellationToken cancellationToken)
     {
+        // Snapshot UI-owned collections before any worker task can outlive this call stack.
+        var rootPaths = roots.Select(r => r.FullPath).ToArray();
+        var selectedPathSnapshot = selectedPaths.ToArray();
         var coverage = new MutableCoverage();
         var filter = _scanFilters.CreateFilter(scanOptions);
         var includeHidden = scanOptions?.IncludeHidden ?? false;
@@ -52,10 +55,10 @@ public sealed class ObservationCandidateDiscoveryService
         List<NodeSnapshot> discovered;
         try
         {
-            // ConfigureAwait(false) on purpose: everything after the first await (the engine run, the per-folder stale-keep safety walks
-            // and the nomination) must stay on the thread pool. Without it the continuation resumes on the UI thread and the unbounded
-            // safety walks below freeze the window (no progress updates, and the Cancel button can not be processed).
-            discovered = await Task.Run(() => WalkRoots(roots, filter, includeHidden, analysisOptions, coverage, progress, cancellationToken),
+            // ConfigureAwait(false) avoids capturing the UI context when this await is incomplete. WalkRoots itself always runs on
+            // the thread pool; the expensive synchronous finalization below is also explicitly scheduled there because an already-
+            // completed await is allowed to continue inline on its caller, even with ConfigureAwait(false).
+            discovered = await Task.Run(() => WalkRoots(rootPaths, filter, includeHidden, analysisOptions, coverage, progress, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -81,9 +84,18 @@ public sealed class ObservationCandidateDiscoveryService
         catch (OperationCanceledException)
         {
             scanCoverage = scanCoverage with { IsComplete = false, WasCancelled = true, PartialReason = "assessment was cancelled" };
-            return EmptyResult(discovered, scanCoverage, existing, observationOptions, machine);
+            return await Task.Run(() => EmptyResult(discovered, scanCoverage, existing, observationOptions, machine)).ConfigureAwait(false);
         }
 
+        return await Task.Run(() => FinalizeDiscovery(discovered, analysis, machine, discoveryOptions, observationOptions,
+            existing, selectedPathSnapshot, progress, scanCoverage, session, cancellationToken)).ConfigureAwait(false);
+    }
+
+    private ObservationDiscoveryResult FinalizeDiscovery(List<NodeSnapshot> discovered, AnalysisResult analysis,
+        ISystemSnapshot machine, SmartCleanupOptions discoveryOptions, ObservationOptions observationOptions,
+        IObservationLookup? existing, IReadOnlyList<string> selectedPaths, IProgress<SmartCleanupProgress>? progress,
+        ObservationDiscoveryCoverage scanCoverage, AnalysisSession session, CancellationToken cancellationToken)
+    {
         if (analysis.Facts is not null)
         {
             foreach (var pair in analysis.Facts)
@@ -134,24 +146,24 @@ public sealed class ObservationCandidateDiscoveryService
             };
         }
 
-        progress?.Report(new SmartCleanupProgress("Finalizing watch suggestions", coverage.FoldersExamined,
-            coverage.FoldersExamined, IsObservationDiscovery: true));
+        progress?.Report(new SmartCleanupProgress("Finalizing watch suggestions", scanCoverage.FoldersExamined,
+            scanCoverage.FoldersExamined, IsObservationDiscovery: true));
         return ObservationNominator.Nominate(discovered, analysis, machine, observationOptions, existing,
             selectedPaths, staleKeepSafety, scanCoverage);
     }
 
-    private static List<NodeSnapshot> WalkRoots(IReadOnlyList<TreeNode> roots, Func<FileSystemInfoWrapper, bool>? filter,
+    private static List<NodeSnapshot> WalkRoots(IReadOnlyList<string> rootPaths, Func<FileSystemInfoWrapper, bool>? filter,
         bool includeHidden, SmartCleanupOptions options, MutableCoverage coverage, IProgress<SmartCleanupProgress>? progress,
         CancellationToken cancellationToken)
     {
-        var rootPaths = ObservationNominator.TopLevel(roots.Select(r => new ObservationCandidate(
-                PathKey.Normalize(r.FullPath), string.Empty, 0, ObservationClass.GenericFolder, CleanupTier.Keep, 0, 0, null,
+        var normalizedRoots = ObservationNominator.TopLevel(rootPaths.Select(path => new ObservationCandidate(
+                PathKey.Normalize(path), string.Empty, 0, ObservationClass.GenericFolder, CleanupTier.Keep, 0, 0, null,
                 ObservationCandidateReason.Stale, Array.Empty<ReasonCode>())))
             .Select(c => c.Path).ToArray();
         var snapshots = new List<NodeSnapshot>();
         var pending = new Stack<NodeSnapshot>();
 
-        foreach (var rootPath in rootPaths)
+        foreach (var rootPath in normalizedRoots)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try

@@ -18,7 +18,7 @@ Only on this computer, in `ledger.db` (SQLite; `%LOCALAPPDATA%\Declutterer\obser
 | `own_activity`                         | intervals in which Declutterer itself was reading the disk (scans, Smart Select, check-ins)                                   |
 | `run_log`, `volume_cursor`, `settings` | the last runs, change-journal cursors (reserved), the on/off switch, the consent and the cross-process run lock               |
 
-A **fingerprint** is a hash over the names, kinds, sizes and last-write times of everything in the folder, plus a short hash per first-level entry (keyed by a hash of the entry's name: **no file or folder names are stored**). It contains **no file content** and **no per-file access log**: nothing records which files you open.
+A **fingerprint** is a hash over the names, kinds, sizes and last-write times of everything in the folder, plus a short hash per first-level entry (keyed by a deterministic hash of the entry's name: **plain file and folder names are not stored, but common names may be guessed from the hashes**). It contains **no file content** and **no per-file access log**: nothing records which files you open.
 
 Retention: finished entries are forgotten after 90 days (pinned ones are kept: they are the "never suggest this again" memory), check records after 180 days, heartbeat days and own-activity after 400. **Delete all observation data** on the Watchlist page empties every table in one click (the consent stays).
 

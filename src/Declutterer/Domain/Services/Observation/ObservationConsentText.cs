@@ -11,7 +11,7 @@ public static class ObservationConsentText
         "Declutterer can watch suspicious or stale folders for a few weeks and use observed activity as evidence for Smart Select.\n" +
         "\n" +
         $"What is stored (only on this computer, in {ledgerPath}):\n" +
-        "  • each watched folder's path, size and a fingerprint of its entries' names, sizes and modified dates (hashes: the names of your files and folders themselves are not stored)\n" +
+        "  • each watched folder's path, size and a fingerprint of its entries' names, sizes and modified dates (only hashes are stored, not plain names; common names may be guessed from the hashes)\n" +
         "  • for every check: the result, and how many entries were added, changed or removed\n" +
         "  • the days on which this computer was in use\n" +
         "It never reads file contents and never records which files you open.\n" +

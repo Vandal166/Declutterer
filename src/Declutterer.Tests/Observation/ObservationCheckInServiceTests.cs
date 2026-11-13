@@ -561,7 +561,7 @@ public class ObservationCheckInServiceTests : IDisposable
         _r.CreateItem("b");
         await _r.EnrollAsync("a", requiredDays: 1);
         await _r.EnrollAsync("b", requiredDays: 1);
-        // the first reassessment is so slow that the run lock (5 minutes) expires and the scheduled run takes it over
+        // Simulate an owner taking over after the lease expires. The current run must stop before purge / further reassessments.
         _r.Reassessor.DuringEachCall = async () =>
         {
             _r.Time.Advance(TimeSpan.FromMinutes(6));
@@ -570,9 +570,10 @@ public class ObservationCheckInServiceTests : IDisposable
 
         var run = await _r.RunAfterDaysAsync(1);
 
-        Assert.Equal(CheckInOutcome.Ok, run.Outcome);
+        Assert.Equal(CheckInOutcome.Error, run.Outcome);
+        Assert.Contains("run lock", run.Detail, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(2, run.QuietEligible);
-        Assert.Equal(1, run.Reassessed);              // the second one was left for the next run, not run in parallel with the other process
+        Assert.Equal(1, run.Reassessed);
         Assert.Single(_r.Reassessor.Calls);
     }
 
@@ -594,5 +595,32 @@ public class ObservationCheckInServiceTests : IDisposable
 
         Assert.Equal(2, run.Reassessed);
         Assert.False(otherGotIn);
+    }
+
+    [Fact]
+    public async Task TheRunLock_IsRenewedDuringASingleLongReassessment()
+    {
+        _r.CreateItem("a");
+        await _r.EnrollAsync("a", requiredDays: 1);
+        _r.Options.RunLockTtl = TimeSpan.FromMilliseconds(600);
+        var reassessmentStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishReassessment = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _r.Reassessor.DuringEachCall = async () =>
+        {
+            reassessmentStarted.TrySetResult();
+            await finishReassessment.Task;
+        };
+
+        var running = _r.RunAfterDaysAsync(1);
+        await reassessmentStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        _r.Time.Advance(TimeSpan.FromMinutes(6));
+        await Task.Delay(TimeSpan.FromMilliseconds(500)); // allow the 200 ms lease heartbeat to renew against the advanced clock
+        bool otherGotIn = await _r.Ledger.TryAcquireRunLockAsync("headless:9", _r.Options.RunLockTtl, _r.Time.UtcNow);
+        finishReassessment.TrySetResult();
+        var run = await running;
+
+        Assert.False(otherGotIn);
+        Assert.Equal(CheckInOutcome.Ok, run.Outcome);
+        Assert.Equal(1, run.Reassessed);
     }
 }
